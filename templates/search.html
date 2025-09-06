@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Tra cứu vi phạm - Traffic Violation Detection{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h4><i class="fas fa-search"></i> Tra cứu thông tin vi phạm</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="license_plate" class="form-label">Nhập biển số xe:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="license_plate" name="license_plate" 
+                                   placeholder="Ví dụ: 59A-12345" value="{{ search_query }}" required>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-search"></i> Tìm kiếm
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Nhập biển số xe cần tra cứu (có thể nhập một phần)
+                        </div>
+                    </div>
+                </form>
+
+                <div class="mt-3">
+                    <h6><i class="fas fa-info-circle"></i> Hướng dẫn tra cứu:</h6>
+                    <ul>
+                        <li>Nhập đầy đủ biển số: <code>59A-12345</code></li>
+                        <li>Tìm theo một phần: <code>59A</code> hoặc <code>12345</code></li>
+                        <li>Không phân biệt chữ hoa chữ thường</li>
+                        <li>Hệ thống sẽ hiển thị tất cả các vi phạm liên quan</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        {% if search_query %}
+        <div class="mt-4">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5><i class="fas fa-list"></i> Kết quả tìm kiếm cho: "{{ search_query }}"</h5>
+                </div>
+                <div class="card-body">
+                    {% if violations %}
+                    <p class="text-success"><strong>Tìm thấy {{ violations|length }} vi phạm</strong></p>
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-danger">
+                                <tr>
+                                    <th>Biển số xe</th>
+                                    <th>Thời gian vi phạm</th>
+                                    <th>Frame</th>
+                                    <th>Độ tin cậy</th>
+                                    <th>Thời gian lưu</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for violation in violations %}
+                                <tr class="violation-card">
+                                    <td>
+                                        <strong class="text-danger">{{ violation.license_plate }}</strong>
+                                    </td>
+                                    <td>{{ violation.timestamp[:19].replace('T', ' ') }}</td>
+                                    <td>{{ violation.frame_number }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if violation.confidence > 0.8 %}success{% elif violation.confidence > 0.6 %}warning{% else %}danger{% endif %}">
+                                            {{ "%.1f%%"|format((violation.confidence or 0) * 100) }}
+                                        </span>
+                                    </td>
+                                    <td>{{ violation.created_at[:19].replace('T', ' ') if violation.created_at else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Thông tin quan trọng:</h6>
+                        <ul class="mb-0">
+                            <li>Tất cả thông tin vi phạm được ghi nhận tự động bởi hệ thống AI</li>
+                            <li>Độ tin cậy thể hiện mức độ chắc chắn khi nhận diện biển số</li>
+                            <li>Để được hỗ trợ, vui lòng liên hệ bộ phận xử lý vi phạm giao thông</li>
+                            <li>Dữ liệu chỉ mang tính chất tham khảo</li>
+                        </ul>
+                    </div>
+
+                    {% else %}
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle fa-2x mb-3"></i>
+                        <h5>Không tìm thấy kết quả</h5>
+                        <p>Không có vi phạm nào với biển số "{{ search_query }}"</p>
+                        <small class="text-muted">
+                            Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại biển số
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-4">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h6><i class="fas fa-shield-alt"></i> Chính sách bảo mật:</h6>
+                    <p class="mb-0 small">
+                        Tất cả thông tin tra cứu được ghi log để đảm bảo an ninh. 
+                        Chỉ sử dụng hệ thống này cho mục đích chính đáng và tuân thủ 
+                        các quy định về bảo vệ dữ liệu cá nhân.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

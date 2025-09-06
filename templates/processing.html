@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Đang xử lý video - Traffic Violation Detection{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h4><i class="fas fa-cog fa-spin"></i> Đang xử lý video: {{ filename }}</h4>
+            </div>
+            <div class="card-body">
+                <div id="status-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Đang xử lý...</span>
+                        </div>
+                        <p class="mt-3">Khởi tạo quá trình xử lý...</p>
+                    </div>
+                </div>
+
+                <div id="progress-container" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Tiến độ xử lý:</label>
+                        <div class="progress">
+                            <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-film text-primary fa-2x"></i>
+                                    <h6 class="mt-2">Frame hiện tại</h6>
+                                    <span id="current-frame" class="badge bg-primary">0</span> / 
+                                    <span id="total-frames" class="badge bg-secondary">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-exclamation-triangle text-danger fa-2x"></i>
+                                    <h6 class="mt-2">Vi phạm phát hiện</h6>
+                                    <span id="violations-count" class="badge bg-danger fs-5">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="completed-container" style="display: none;">
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <h4>Xử lý hoàn thành!</h4>
+                        <p>Video đã được phân tích thành công.</p>
+                        <a id="results-link" href="#" class="btn btn-success btn-lg">
+                            <i class="fas fa-eye"></i> Xem kết quả
+                        </a>
+                    </div>
+                </div>
+
+                <div id="error-container" style="display: none;">
+                    <div class="alert alert-danger text-center">
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                        <h4>Lỗi xử lý!</h4>
+                        <p id="error-message">Có lỗi xảy ra trong quá trình xử lý video.</p>
+                        <a href="{{ url_for('upload_video') }}" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload video khác
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h6><i class="fas fa-info-circle"></i> Quá trình xử lý bao gồm:</h6>
+            <ul class="list-group">
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-traffic-light text-danger me-2"></i>
+                    Phát hiện đèn đỏ trong video
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-car text-primary me-2"></i>
+                    Nhận diện các phương tiện giao thông
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-ban text-warning me-2"></i>
+                    Xác định các trường hợp vi phạm
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-id-card text-info me-2"></i>
+                    Nhận diện biển số xe vi phạm
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-database text-success me-2"></i>
+                    Lưu trữ dữ liệu vào cơ sở dữ liệu
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let jobId = "{{ job_id }}";
+let statusInterval;
+
+function updateStatus() {
+    fetch('/status/' + jobId)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Status:', data);
+
+            if (data.status === 'processing') {
+                document.getElementById('status-container').style.display = 'none';
+                document.getElementById('progress-container').style.display = 'block';
+
+                let progress = Math.round(data.progress);
+                document.getElementById('progress-bar').style.width = progress + '%';
+                document.getElementById('progress-bar').textContent = progress + '%';
+
+                if (data.current_frame) {
+                    document.getElementById('current-frame').textContent = data.current_frame;
+                }
+                if (data.total_frames) {
+                    document.getElementById('total-frames').textContent = data.total_frames;
+                }
+                if (data.violations_found !== undefined) {
+                    document.getElementById('violations-count').textContent = data.violations_found;
+                }
+            } 
+            else if (data.status === 'completed') {
+                clearInterval(statusInterval);
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('completed-container').style.display = 'block';
+                document.getElementById('results-link').href = '/results/' + jobId;
+            }
+            else if (data.status === 'error') {
+                clearInterval(statusInterval);
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('error-container').style.display = 'block';
+                document.getElementById('error-message').textContent = data.error || 'Lỗi không xác định';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching status:', error);
+        });
+}
+
+// Start checking status
+statusInterval = setInterval(updateStatus, 2000);
+updateStatus(); // Initial check
+</script>
+{% endblock %}

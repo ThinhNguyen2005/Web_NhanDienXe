@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Video - Traffic Violation Detection{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4><i class="fas fa-upload"></i> Upload Video Giao Thông</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="video" class="form-label">Chọn file video:</label>
+                        <input type="file" class="form-control" id="video" name="video" 
+                               accept=".mp4,.avi,.mov,.mkv" required>
+                        <div class="form-text">
+                            Hỗ trợ các định dạng: MP4, AVI, MOV, MKV (tối đa 500MB)
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Yêu cầu video:</h6>
+                        <ul class="mb-0">
+                            <li>Video phải chứa cảnh giao lộ có đèn tín hiệu</li>
+                            <li>Góc quay rõ ràng, có thể nhìn thấy biển số xe</li>
+                            <li>Chất lượng video tối thiểu 480p</li>
+                            <li>Thời lượng khuyến nghị: 30 giây - 5 phút</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-cloud-upload-alt"></i> Upload và Xử Lý
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5><i class="fas fa-question-circle"></i> Hướng dẫn sử dụng:</h5>
+            <ol>
+                <li><strong>Chọn file video:</strong> Click nút "Choose File" và chọn video cần phân tích</li>
+                <li><strong>Upload:</strong> Click "Upload và Xử Lý" để tải video lên server</li>
+                <li><strong>Xử lý:</strong> Hệ thống sẽ tự động phân tích video và phát hiện vi phạm</li>
+                <li><strong>Xem kết quả:</strong> Sau khi hoàn thành, bạn sẽ được chuyển đến trang kết quả</li>
+            </ol>
+        </div>
+
+        <div class="mt-3">
+            <h6><i class="fas fa-lightbulb"></i> Mẹo để có kết quả tốt nhất:</h6>
+            <ul>
+                <li>Sử dụng video có ánh sáng tốt (ban ngày hoặc đèn đường đủ sáng)</li>
+                <li>Camera đặt ở vị trí có thể nhìn rõ vạch dừng và đèn tín hiệu</li>
+                <li>Tránh video bị rung lắc hoặc mờ</li>
+                <li>Đảm bảo biển số xe trong video rõ nét, không bị che khuất</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

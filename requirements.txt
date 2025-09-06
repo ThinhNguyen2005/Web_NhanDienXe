@@ -1,0 +1,36 @@
+# Traffic Violation Detection System Requirements
+# Python 3.8+ required
+
+# Web Framework
+Flask>=2.3.0
+Werkzeug>=2.3.0
+
+# Computer Vision
+opencv-python>=4.5.0
+numpy>=1.19.0
+
+# AI/ML Models (Optional - will fallback if not available)
+ultralytics>=8.0.0  # YOLO
+easyocr>=1.7.0      # OCR
+
+# Threading and Processing
+Pillow>=8.0.0
+
+# Database (built-in)
+# sqlite3 is included with Python
+
+# Optional: For better performance
+# imutils>=0.5.4
+
+# Development
+# pytest>=6.0.0
+# black>=22.0.0
+
+# Installation commands:
+# pip install -r requirements.txt
+# 
+# Minimal installation (without AI models):
+# pip install Flask opencv-python numpy Pillow
+#
+# Full installation with AI:
+# pip install Flask opencv-python numpy ultralytics easyocr Pillow

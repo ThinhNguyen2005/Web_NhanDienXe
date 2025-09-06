@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="jumbotron bg-danger text-white rounded p-5 mb-4">
+            <h1 class="display-4"><i class="fas fa-shield-alt"></i> Hệ thống phát hiện vi phạm giao thông</h1>
+            <p class="lead">Sử dụng AI để tự động phát hiện xe vi phạm đèn đỏ và nhận diện biển số xe</p>
+            <hr class="my-4">
+            <p>Upload video giao thông và nhận kết quả phân tích chi tiết</p>
+            <a class="btn btn-light btn-lg" href="{{ url_for('upload_video') }}" role="button">
+                <i class="fas fa-upload"></i> Bắt đầu ngay
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-video fa-3x text-danger mb-3"></i>
+                <h5 class="card-title">Upload Video</h5>
+                <p class="card-text">Upload video giao thông từ camera giám sát để phân tích</p>
+                <a href="{{ url_for('upload_video') }}" class="btn btn-primary">Upload ngay</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-robot fa-3x text-success mb-3"></i>
+                <h5 class="card-title">AI Processing</h5>
+                <p class="card-text">Phát hiện tự động xe vi phạm đèn đỏ và nhận diện biển số</p>
+                <button class="btn btn-success" disabled>Tự động</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-search fa-3x text-info mb-3"></i>
+                <h5 class="card-title">Tra cứu vi phạm</h5>
+                <p class="card-text">Tìm kiếm thông tin vi phạm theo biển số xe</p>
+                <a href="{{ url_for('search_violations') }}" class="btn btn-info">Tra cứu</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-lg-10 mx-auto">
+        <h3><i class="fas fa-cogs"></i> Tính năng chính</h3>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3"></i>
+                <strong>Phát hiện đèn đỏ:</strong> Sử dụng computer vision để phát hiện tín hiệu đèn giao thông
+            </li>
+            <li class="list-group-item d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3"></i>
+                <strong>Nhận diện xe:</strong> YOLO model phát hiện các loại xe trong video
+            </li>
+            <li class="list-group-item d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3"></i>
+                <strong>Nhận diện biển số:</strong> OCR technology đọc biển số xe vi phạm
+            </li>
+            <li class="list-group-item d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3"></i>
+                <strong>Lưu trữ database:</strong> Tự động lưu thông tin vi phạm vào cơ sở dữ liệu
+            </li>
+            <li class="list-group-item d-flex align-items-center">
+                <i class="fas fa-check-circle text-success me-3"></i>
+                <strong>Tra cứu nhanh:</strong> Tìm kiếm vi phạm theo biển số xe
+            </li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
