@@ -11,6 +11,7 @@ quản lý các tiến trình xử lý video và trả về kết quả cho ngư
 import os
 import datetime
 import logging
+import sqlite3 # Thêm import sqlite3
 from threading import Thread, Lock
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
@@ -177,6 +178,175 @@ def get_violation_image(job_id, violation_id):
         return send_file(image_path)
     return "Image not found", 404
 
+# ---- Admin Routes ----
+
+@app.route('/admin')
+def admin_dashboard():
+    """Admin dashboard để xem tổng quan database"""
+    try:
+        conn = sqlite3.connect(config.DATABASE_FILE)
+        conn.row_factory = sqlite3.Row # Giúp truy cập cột theo tên
+        cursor = conn.cursor()
+        
+        # Thống kê tổng quan
+        cursor.execute('SELECT COUNT(*) FROM violations')
+        total_violations = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(DISTINCT license_plate) FROM violations')
+        unique_plates = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT COUNT(DISTINCT job_id) FROM violations')
+        total_jobs = cursor.fetchone()[0]
+        
+        # Top vi phạm theo biển số
+        cursor.execute('''
+            SELECT license_plate, COUNT(*) as violation_count 
+            FROM violations 
+            GROUP BY license_plate 
+            ORDER BY violation_count DESC 
+            LIMIT 10
+        ''')
+        top_violators = cursor.fetchall()
+        
+        # Vi phạm gần đây
+        cursor.execute('''
+            SELECT * FROM violations 
+            ORDER BY created_at DESC 
+            LIMIT 20
+        ''')
+        recent_violations = cursor.fetchall()
+        
+        conn.close()
+        
+        return render_template('admin.html', 
+                             total_violations=total_violations,
+                             unique_plates=unique_plates,
+                             total_jobs=total_jobs,
+                             top_violators=top_violators,
+                             recent_violations=recent_violations)
+    
+    except Exception as e:
+        logger.error(f"Admin dashboard error: {e}")
+        flash('Lỗi khi tải dữ liệu admin')
+        return redirect(url_for('index'))
+
+@app.route('/admin/violations')
+def admin_violations():
+    """Xem tất cả vi phạm với phân trang"""
+    page = request.args.get('page', 1, type=int)
+    per_page = 50  # 50 records per page
+    
+    try:
+        conn = sqlite3.connect(config.DATABASE_FILE)
+        conn.row_factory = sqlite3.Row # Trả về kết quả dưới dạng dictionary
+        cursor = conn.cursor()
+        
+        # Đếm tổng số records
+        cursor.execute('SELECT COUNT(*) FROM violations')
+        total = cursor.fetchone()[0]
+        
+        # Lấy data với phân trang
+        offset = (page - 1) * per_page
+        cursor.execute('''
+            SELECT * FROM violations 
+            ORDER BY created_at DESC 
+            LIMIT ? OFFSET ?
+        ''', (per_page, offset))
+        
+        violations = cursor.fetchall()
+        conn.close()
+        
+        # Pagination info
+        total_pages = (total + per_page - 1) // per_page
+        
+        return render_template('admin_violations.html',
+                             violations=violations,
+                             page=page,
+                             total_pages=total_pages,
+                             total=total)
+    
+    except Exception as e:
+        logger.error(f"Admin violations error: {e}")
+        flash('Lỗi khi tải danh sách vi phạm')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/tables')
+def admin_tables():
+    """Xem cấu trúc bảng database"""
+    try:
+        conn = sqlite3.connect(config.DATABASE_FILE)
+        cursor = conn.cursor()
+        
+        # Lấy danh sách bảng
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        table_info = {}
+        for table in tables:
+            cursor.execute(f"PRAGMA table_info({table})")
+            columns = cursor.fetchall()
+            
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            row_count = cursor.fetchone()[0]
+            
+            table_info[table] = {
+                'columns': columns,
+                'row_count': row_count
+            }
+        
+        conn.close()
+        
+        return render_template('admin_tables.html', 
+                               tables=tables, 
+                               table_info=table_info)
+    
+    except Exception as e:
+        logger.error(f"Admin tables error: {e}")
+        flash('Lỗi khi tải thông tin bảng')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/query', methods=['GET', 'POST'])
+def admin_query():
+    """Thực thi SQL query tùy chỉnh"""
+    query = request.form.get('query', 'SELECT * FROM violations LIMIT 10;').strip()
+    results = []
+    column_names = []
+    error = None
+
+    if request.method == 'POST':
+        if not query:
+            flash('Vui lòng nhập SQL query')
+            return render_template('admin_query.html', query=query)
+        
+        try:
+            conn = sqlite3.connect(config.DATABASE_FILE)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Chỉ cho phép SELECT queries để an toàn
+            if not query.upper().strip().startswith('SELECT'):
+                raise ValueError('Chỉ cho phép SELECT queries để đảm bảo an toàn')
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            if results:
+                column_names = results[0].keys()
+            
+            conn.close()
+        
+        except Exception as e:
+            logger.error(f"Admin query error: {e}")
+            error = f'Lỗi SQL: {e}'
+            flash(error)
+
+    return render_template('admin_query.html', 
+                           query=query,
+                           results=results,
+                           column_names=column_names,
+                           error=error)
+
+
 # ---- Điểm khởi chạy của ứng dụng ----
 if __name__ == '__main__':
     # Khởi tạo cơ sở dữ liệu khi bắt đầu chạy app
@@ -187,3 +357,5 @@ if __name__ == '__main__':
     
     # Chạy Flask app ở chế độ debug, cho phép đa luồng
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)
+
+
