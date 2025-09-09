@@ -42,13 +42,3 @@ class VehicleDetector:
         except Exception as e:
             logger.error(f"Error during vehicle detection: {e}")
             return self._generate_demo_vehicles(frame)
-
-    def _generate_demo_vehicles(self, frame):
-        """Tạo dữ liệu xe giả lập khi không có model YOLO."""
-        h, w = frame.shape[:2]
-        vehicles = []
-        for _ in range(random.randint(1, 3)):
-            x = random.randint(0, w - 200)
-            y = random.randint(h // 2, h - 100)
-            vehicles.append({'bbox': (x, y, 150, 80), 'confidence': 0.85, 'class': 2})
-        return vehicles

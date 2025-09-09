@@ -45,10 +45,3 @@ class LicensePlateDetector:
             logger.error(f"Error during OCR: {e}")
         
         return self._generate_demo_plate(), 0.85
-
-    def _generate_demo_plate(self):
-        """Tạo biển số giả lập khi không có model OCR."""
-        provinces = ['30', '51', '59', '63', '72']
-        letters = 'ABCDEFGHKLMNPSTUVXY'
-        numbers = '0123456789'
-        return f"{random.choice(provinces)}{random.choice(letters)}{random.choice(letters)}-{''.join(random.choices(numbers, k=4))}"
