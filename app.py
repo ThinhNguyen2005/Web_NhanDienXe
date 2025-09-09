@@ -20,7 +20,7 @@ from werkzeug.utils import secure_filename
 # Import các module đã được tách
 import config
 import database
-from detector import TrafficViolationDetector
+from detector_manager import TrafficViolationDetector
 from video_processor import VideoProcessor
 
 # Cấu hình logging để theo dõi hoạt động của ứng dụng

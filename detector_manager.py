@@ -5,7 +5,7 @@ Nó import và sử dụng các detector con để xác định vi phạm.
 import logging
 import cv2
 
-# Import các module logic riêng lẻ từ thư mục 'detectors'
+# Import các module logic riêng lẻ từ thư mục 'detector'
 from detector.traffic_light_detector import detect_red_lights
 from detector.vehicle_detector import VehicleDetector
 from detector.license_plate_detector import LicensePlateDetector
@@ -70,4 +70,3 @@ class TrafficViolationDetector:
         
         plate_text, confidence = self.lp_detector.recognize(vehicle_roi)
         return vehicle_roi, plate_text, confidence
-
