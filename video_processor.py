@@ -10,6 +10,7 @@ from threading import Lock
 
 from config import PROCESSED_FOLDER, VIOLATIONS_FOLDER
 from database import save_violations_to_db
+from detector.traffic_light_detector import detect_stop_line
 
 # Thiết lập logging
 logger = logging.getLogger(__name__)
@@ -51,8 +52,19 @@ class VideoProcessor:
             frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
-            # Thiết lập vạch dừng, mặc định ở 60% chiều cao của khung hình
-            self.violation_line_y = int(frame_height * 0.6)
+            # Thử tự động phát hiện vạch dừng từ một khung hình đầu tiên
+            # Nếu không tìm thấy, fallback về 60% chiều cao
+            ret0, first_frame = cap.read()
+            if ret0:
+                detected_y = detect_stop_line(first_frame)
+                if detected_y is not None:
+                    self.violation_line_y = detected_y
+                else:
+                    self.violation_line_y = int(frame_height * 0.6)
+                # Rewind to start (we consumed one frame)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            else:
+                self.violation_line_y = int(frame_height * 0.6)
 
             frame_count = 0
             violation_id_counter = 0

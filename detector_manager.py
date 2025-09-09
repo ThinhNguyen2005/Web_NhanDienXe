@@ -5,7 +5,6 @@ Nó import và sử dụng các detector con để xác định vi phạm.
 import logging
 import cv2
 
-# Import các module logic riêng lẻ từ thư mục 'detector'
 from detector.traffic_light_detector import detect_red_lights
 from detector.vehicle_detector import VehicleDetector
 from detector.license_plate_detector import LicensePlateDetector
@@ -50,6 +49,52 @@ class TrafficViolationDetector:
                     violations_in_frame.append(vehicle)
 
         return red_lights, vehicles, violations_in_frame
+
+    # --- Compatibility wrappers for older VideoProcessor API ---
+    def detect_red_lights(self, frame):
+        """Compatibility: detect red lights in a frame."""
+        try:
+            return detect_red_lights(frame)
+        except Exception:
+            return []
+
+    def detect_vehicles(self, frame):
+        """Compatibility: detect vehicles in a frame."""
+        try:
+            return self.vehicle_detector.detect(frame)
+        except Exception:
+            return []
+
+    def check_violation(self, vehicle, red_lights, violation_line_y):
+        """Compatibility: check if a single vehicle is violating the stop line.
+
+        Args match older VideoProcessor usage: vehicle dict, list of red_lights, violation_line_y
+        """
+        if not red_lights:
+            return False
+        try:
+            x, y, w, h = vehicle['bbox']
+            vehicle_bottom_y = y + h
+            return vehicle_bottom_y > violation_line_y
+        except Exception:
+            return False
+
+    def extract_license_plate(self, frame, vehicle_bbox):
+        """Compatibility: extract license plate image and perform OCR.
+
+        Returns tuple: (plate_image, plate_text, confidence)
+        """
+        try:
+            x, y, w, h = vehicle_bbox
+            x, y = max(0, x), max(0, y)
+            w, h = min(w, frame.shape[1] - x), min(h, frame.shape[0] - y)
+            vehicle_roi = frame[y:y+h, x:x+w]
+            if vehicle_roi.size == 0:
+                return None, 'NO_ROI', 0.0
+            plate_text, confidence = self.lp_detector.recognize(vehicle_roi)
+            return vehicle_roi, plate_text, confidence
+        except Exception:
+            return None, 'ERROR', 0.0
 
     def _check_violation(self, vehicle, violation_line_y):
         """Kiểm tra logic vi phạm: xe vượt vạch dừng."""
