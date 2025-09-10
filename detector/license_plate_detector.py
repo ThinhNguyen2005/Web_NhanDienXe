@@ -15,8 +15,10 @@ class LicensePlateDetector:
         self.reader = None
         try:
             import easyocr
-            self.reader = easyocr.Reader(['en'], gpu=False)
-            logger.info("✓ EasyOCR model loaded for license plate recognition.")
+            import torch
+            gpu_available = torch.cuda.is_available()
+            self.reader = easyocr.Reader(['en'], gpu=gpu_available)
+            logger.info(f"✓ EasyOCR model loaded for license plate recognition (GPU: {gpu_available}).")
         except Exception as e:
             logger.warning(f"Could not load EasyOCR model: {e}. Using fallback.")
 

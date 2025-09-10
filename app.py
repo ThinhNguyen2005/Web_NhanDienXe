@@ -40,6 +40,18 @@ processing_lock = Lock()
 # ---- KHỞI TẠO MODEL AI MỘT LẦN DUY NHẤT ----
 # Model sẽ được nạp vào bộ nhớ khi ứng dụng khởi động và tái sử dụng cho tất cả các request.
 logger.info("Initializing AI models globally...")
+
+# Kiểm tra và log device (GPU/CPU)
+try:
+    import torch
+    device = 'GPU' if torch.cuda.is_available() else 'CPU'
+    if torch.cuda.is_available():
+        logger.info(f"✓ GPU detected: {torch.cuda.get_device_name(0)} (CUDA {torch.version.cuda})")
+    else:
+        logger.info("✓ Using CPU for processing")
+except ImportError:
+    logger.info("✓ PyTorch not available, using CPU fallback")
+
 detector = TrafficViolationDetector()
 logger.info("✓ Global detector initialized.")
 

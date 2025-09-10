@@ -14,8 +14,10 @@ class VehicleDetector:
         self.model = None
         try:
             from ultralytics import YOLO
-            self.model = YOLO('yolov8n.pt')
-            logger.info("✓ YOLO model loaded for vehicle detection.")
+            import torch
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.model = YOLO('yolov8n.pt').to(device)
+            logger.info(f"✓ YOLO model loaded for vehicle detection on {device}.")
         except Exception as e:
             logger.warning(f"Could not load YOLO model: {e}. Using fallback.")
 

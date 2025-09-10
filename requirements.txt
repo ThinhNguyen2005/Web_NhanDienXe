@@ -12,6 +12,8 @@ numpy>=1.19.0
 # AI/ML Models (Optional - will fallback if not available)
 ultralytics>=8.0.0  # YOLO
 easyocr>=1.7.0      # OCR
+torch>=2.0.0        # PyTorch with CUDA support
+torchvision>=0.15.0 # Computer vision for PyTorch
 
 # Threading and Processing
 Pillow>=8.0.0

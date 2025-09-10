@@ -33,6 +33,24 @@ pip install ultralytics easyocr
 pip install -r requirements.txt
 ```
 
+### GPU Support (Khuyến nghị cho hiệu suất tốt hơn)
+
+Hệ thống tự động phát hiện và sử dụng GPU nếu có sẵn (NVIDIA với CUDA). Nếu không có GPU, sẽ tự động chuyển sang CPU.
+
+**Để cài đặt PyTorch với GPU support:**
+```bash
+# Cho Windows/Linux với CUDA 12.x
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Hoặc cho CUDA 11.8
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+**Kiểm tra GPU:**
+```bash
+python -c "import torch; print('GPU available:', torch.cuda.is_available())"
+```
+
 ### Bước 2: Chạy ứng dụng
 
 ```bash
@@ -97,6 +115,7 @@ traffic-violation-detection/
 - Threading để xử lý background không block UI
 - SQLite database với indexing cho tra cứu nhanh
 - Resize frame để giảm computational load
+- **GPU Acceleration**: Tự động sử dụng GPU (CUDA) nếu có, chuyển sang CPU nếu không
 
 ### Yêu cầu video:
 
