@@ -66,7 +66,8 @@ class VideoProcessor:
                 
                 frame_viz = self._draw_visualizations(frame, red_lights, vehicles, violations_in_frame)
                 out.write(frame_viz)
-
+                output_video_filename = os.path.basename(output_path)
+                database.save_processed_video(job_id, output_video_filename)
                 with processing_lock:
                     processing_status[job_id] = {
                         'status': 'processing',
@@ -97,7 +98,6 @@ class VideoProcessor:
             logger.error(f"Lỗi nghiêm trọng trong quá trình xử lý video {job_id}: {e}", exc_info=True)
             with processing_lock:
                 processing_status[job_id] = {'status': 'error', 'error': str(e)}
-
     def _handle_violation(self, violation, frame, job_id, frame_count):
         """Xử lý khi một vi phạm được phát hiện."""
         violation_id = len(self.violations_data) + 1

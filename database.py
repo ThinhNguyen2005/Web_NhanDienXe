@@ -1,6 +1,6 @@
 """
 Module quản lý tất cả các tương tác với cơ sở dữ liệu SQLite.
-Bao gồm khởi tạo, lưu trữ và các hàm truy vấn cho trang admin.
+Bao gồm khởi tạo, lưu trữ và các hàm truy vấn cho trang admin và lịch sử.
 """
 import sqlite3
 import logging
@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 def get_db_connection():
     """Tạo và trả về một kết nối đến CSDL."""
     conn = sqlite3.connect(config.DATABASE_FILE)
-    conn.row_factory = sqlite3.Row  # Giúp truy cập cột theo tên
+    # Dòng row_factory này rất hữu ích, giúp bạn truy cập dữ liệu như một dictionary
+    conn.row_factory = sqlite3.Row
     return conn
 
 def init_database():
@@ -19,7 +20,7 @@ def init_database():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute('''          
             CREATE TABLE IF NOT EXISTS violations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id TEXT NOT NULL,
@@ -32,6 +33,12 @@ def init_database():
                 bbox_w INTEGER,
                 bbox_h INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS processed_videos (
+                job_id TEXT PRIMARY KEY,
+                output_video TEXT NOT NULL
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_license_plate ON violations(license_plate)')
@@ -73,52 +80,104 @@ def search_by_plate(plate_query):
     conn.close()
     return violations
 
+# --- Các hàm cho Trang Lịch Sử ---
+
+def save_processed_video(job_id, output_video):
+    """Lưu tên file video đã xử lý vào CSDL."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT OR REPLACE INTO processed_videos (job_id, output_video) VALUES (?, ?)',
+            (job_id, output_video)
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved processed video for job_id {job_id}: {output_video}")
+    except Exception as e:
+        logger.error(f"Error saving processed video: {e}")
+
+def get_output_video_by_job_id(job_id):
+    """Lấy tên file video đã xử lý từ CSDL."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT output_video FROM processed_videos WHERE job_id = ?', (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['output_video'] if row else None
+
+def get_violations_by_job_id(job_id):
+    """Lấy danh sách vi phạm theo job_id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM violations WHERE job_id = ? ORDER BY frame_number', (job_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    # Chuyển mỗi row thành dict để template truy cập bằng .timestamp
+    violations = []
+    for row in rows:
+        violations.append(dict(row))
+    return violations
+
+def delete_violations_by_job_id(job_id):
+    """Xóa tất cả các bản ghi vi phạm liên quan đến một job_id."""
+    try:
+        # SỬA LỖI: Sử dụng hàm get_db_connection()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM violations WHERE job_id = ?', (job_id,))
+        conn.commit()
+        conn.close()
+        logger.info(f"Successfully deleted all violation records for job_id {job_id}.")
+        return True
+    except Exception as e:
+        logger.error(f"Database delete error for job_id {job_id}: {e}")
+        return False
+
 # --- Các hàm cho Admin Dashboard ---
 
 def get_dashboard_stats():
     """Lấy các thông số thống kê cho trang admin."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT COUNT(*) FROM violations')
-    total_violations = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(DISTINCT license_plate) FROM violations')
-    unique_plates = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(DISTINCT job_id) FROM violations')
-    total_jobs = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT license_plate, COUNT(*) as count FROM violations GROUP BY license_plate ORDER BY count DESC LIMIT 10')
-    top_violators = cursor.fetchall()
-    
-    cursor.execute('SELECT * FROM violations ORDER BY created_at DESC LIMIT 20')
-    recent_violations = cursor.fetchall()
-    
-    conn.close()
-    
-    return {
-        'total_violations': total_violations,
-        'unique_plates': unique_plates,
-        'total_jobs': total_jobs,
-        'top_violators': top_violators,
-        'recent_violations': recent_violations
-    }
+    stats = {}
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT COUNT(*) as total FROM violations')
+        stats['total_violations'] = cursor.fetchone()['total']
+        
+        cursor.execute('SELECT COUNT(DISTINCT license_plate) as total FROM violations')
+        stats['unique_plates'] = cursor.fetchone()['total']
+        
+        cursor.execute('SELECT COUNT(DISTINCT job_id) as total FROM violations')
+        stats['total_jobs'] = cursor.fetchone()['total']
+        
+        cursor.execute('SELECT license_plate, COUNT(*) as count FROM violations GROUP BY license_plate ORDER BY count DESC LIMIT 10')
+        stats['top_violators'] = cursor.fetchall()
+        
+        cursor.execute('SELECT * FROM violations ORDER BY created_at DESC LIMIT 20')
+        stats['recent_violations'] = cursor.fetchall()
+        
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error getting dashboard stats: {e}")
+        # Trả về giá trị mặc định nếu có lỗi
+        return {
+            'total_violations': 0, 'unique_plates': 0, 'total_jobs': 0,
+            'top_violators': [], 'recent_violations': []
+        }
+    return stats
 
 def get_all_violations(page=1, per_page=50):
     """Lấy tất cả vi phạm với phân trang."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute('SELECT COUNT(*) FROM violations')
-    total = cursor.fetchone()[0]
-    
+    cursor.execute('SELECT COUNT(*) as total FROM violations')
+    total = cursor.fetchone()['total']
     offset = (page - 1) * per_page
     cursor.execute('SELECT * FROM violations ORDER BY created_at DESC LIMIT ? OFFSET ?', (per_page, offset))
     violations = cursor.fetchall()
-    
     conn.close()
-    
     total_pages = (total + per_page - 1) // per_page
     return violations, total, total_pages
 
@@ -132,3 +191,22 @@ def execute_custom_query(query):
     conn.close()
     return results, column_names
 
+def get_processed_videos():
+    """Lấy danh sách các video đã xử lý từ bảng processed_videos."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT job_id, output_video
+        FROM processed_videos
+        ORDER BY rowid DESC
+    ''')
+    videos = []
+    for row in cursor.fetchall():
+        # Nếu muốn lấy thêm thông tin, có thể join với bảng violations để lấy thời gian vi phạm đầu tiên
+        videos.append({
+            'job_id': row['job_id'],
+            'output_video': row['output_video'],
+            # 'first_violation_time': ... (nếu cần)
+        })
+    conn.close()
+    return videos

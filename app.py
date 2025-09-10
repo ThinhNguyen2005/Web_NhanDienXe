@@ -122,19 +122,30 @@ def get_status(job_id):
 
 @app.route('/results/<job_id>')
 def show_results(job_id):
-    """Hiển thị trang kết quả sau khi xử lý xong."""
+    """Hiển thị trang kết quả sau khi xử lý xong hoặc từ lịch sử."""
+    # Lấy trạng thái xử lý (nếu còn trong RAM)
     with processing_lock:
         status = processing_status.get(job_id, {})
         results = processing_results.get(job_id, {})
 
-    if status.get('status') != 'completed':
-        flash('Quá trình xử lý chưa hoàn thành hoặc đã xảy ra lỗi.')
-        return redirect(url_for('index'))
+    # Nếu không còn dữ liệu trong RAM, lấy từ database
+    if not status or status.get('status') != 'completed':
+        # Tạo status giả từ database
+        violations = database.get_violations_by_job_id(job_id)
+        total_frames = 0  # Nếu muốn, có thể lưu số frame vào processed_videos
+        status = {
+            'status': 'completed',
+            'progress': 100,
+            'violations_found': len(violations),
+            'output_video': database.get_output_video_by_job_id(job_id),
+            'total_frames': total_frames
+        }
+        results = {'violations': violations}
 
-    return render_template('results.html', 
-                         job_id=job_id, 
-                         status=status, 
-                         violations=results.get('violations', []))
+    return render_template('results.html',
+                          job_id=job_id,
+                          status=status,
+                          violations=results.get('violations', []))
 
 @app.route('/search', methods=['GET', 'POST'])
 def search_violations():
@@ -151,27 +162,16 @@ def search_violations():
             
     return render_template('search.html', violations=violations, search_query=search_query)
 
+
 @app.route('/download/<job_id>')
 def download_processed_video(job_id):
-    """Download video đã xử lý."""
-    try:
-        with processing_lock:
-            results = processing_results.get(job_id, {})
-
-        if not results:
-            flash("Không tìm thấy thông tin xử lý cho video này.")
-            return redirect(url_for('index'))
-
-        output_video_path = results.get('output_video')
-        if output_video_path and os.path.exists(output_video_path):
-             return send_file(output_video_path, as_attachment=True)
-        else:
-             flash("File video đã xử lý không tồn tại.")
-             return redirect(url_for('index'))
-    except Exception as e:
-        logger.error(f"Lỗi khi download video: {e}")
-        flash("Không thể tải file.")
-        return redirect(url_for('index'))
+    output_video = database.get_output_video_by_job_id(job_id)
+    if output_video:
+        output_video_path = os.path.join(config.PROCESSED_FOLDER, output_video)
+        if os.path.exists(output_video_path):
+            return send_file(output_video_path, as_attachment=True)
+    flash(f'Không tìm thấy file video đã xử lý cho ID: {job_id}')
+    return redirect(url_for('history'))
 
 
 @app.route('/violation_image/<job_id>/<int:violation_id>')
@@ -181,6 +181,24 @@ def get_violation_image(job_id, violation_id):
     if os.path.exists(image_path):
         return send_file(image_path)
     return "Không tìm thấy ảnh", 404
+
+
+@app.route('/history')
+def history():
+    """Trang lịch sử các video đã xử lý."""
+    videos = database.get_processed_videos()
+    return render_template('history.html', videos=videos)
+
+
+@app.route('/delete_history/<job_id>', methods=['POST'])
+def delete_history(job_id):
+    """Xóa toàn bộ lịch sử vi phạm của một video."""
+    success = database.delete_violations_by_job_id(job_id)
+    if success:
+        flash(f"Đã xóa lịch sử vi phạm cho video {job_id}.", "success")
+    else:
+        flash(f"Lỗi khi xóa lịch sử cho video {job_id}.", "danger")
+    return redirect(url_for('history'))
 
 # ---- Các Route cho trang Admin ----
 # Các route này giờ đây gọi các hàm từ module database.py
@@ -242,5 +260,5 @@ if __name__ == '__main__':
     database.init_database()
     logger.info("🚀 Starting Traffic Violation Detection System...")
     logger.info("📱 Access the app at: http://localhost:5000")
-    app.run(debug=config.DEBUG, host=config.HOST, port=config.PORT, threaded=True)
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
 
