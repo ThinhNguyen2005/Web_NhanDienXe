@@ -24,3 +24,12 @@ SECRET_KEY = 'your-secret-key-change-this-in-production'
 
 # Dung lượng file tối đa cho phép tải lên (500MB)
 MAX_CONTENT_LENGTH = 500 * 1024 * 1024
+
+# Cấu hình Flask
+DEBUG = True
+HOST = '0.0.0.0'
+PORT = 5000
+
+# Cấu hình xử lý video
+# Xử lý phát hiện mỗi N khung hình (tăng hiệu suất)
+DETECTION_INTERVAL = 30

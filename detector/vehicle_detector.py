@@ -2,7 +2,7 @@
 Module chuyên xử lý phát hiện phương tiện giao thông sử dụng model YOLO.
 """
 import logging
-import random
+
 
 logger = logging.getLogger(__name__)
 

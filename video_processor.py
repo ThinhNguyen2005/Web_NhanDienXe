@@ -1,170 +1,138 @@
+"""
+Module chứa lớp VideoProcessor để xử lý video trong một luồng (thread) riêng biệt.
+"""
+import os
 import cv2
-import json
-from detector_manager import DetectorManager
-from database import add_violation
+import datetime
+import logging
+from threading import Lock
 
-# --- Tích hợp logic từ set_stop_line.py ---
+import config
+import database
+from detector_manager import TrafficViolationDetector
 
-# Biến toàn cục để hỗ trợ việc thiết lập vạch dừng
-_points = []
-_paused = False
-_selected_frame = None
-
-def _mouse_callback(event, x, y, flags, param):
-    """
-    Hàm xử lý sự kiện click chuột. Chỉ hoạt động khi video đang tạm dừng.
-    """
-    global _points, _paused
-    
-    # Chỉ cho phép click khi video đang dừng
-    if event == cv2.EVENT_LBUTTONDOWN and _paused:
-        if len(_points) < 2:
-            _points.append((x, y))
-            print(f"Đã chọn điểm số {len(_points)}: ({x}, {y})")
-        if len(_points) == 2:
-            print("Đã chọn đủ 2 điểm. Nhấn 's' để lưu, 'r' để chọn lại, hoặc SPACE để tiếp tục video.")
-
-def setup_stop_line_interactively(video_path):
-    """
-    Mở một cửa sổ GUI để người dùng có thể tự vẽ vạch dừng.
-    Hàm này được gọi khi 'stop_line.json' không tồn tại.
-    """
-    global _points, _paused, _selected_frame
-    
-    # Reset trạng thái mỗi khi hàm được gọi
-    _points = []
-    _paused = False
-    _selected_frame = None
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"Lỗi: Không thể mở file video {video_path} để thiết lập vạch dừng.")
-        return
-
-    window_name = "THIET LAP VACH DUNG (STOP LINE)"
-    cv2.namedWindow(window_name)
-    cv2.setMouseCallback(window_name, _mouse_callback)
-
-    print("\n--- HƯỚNG DẪN THIẾT LẬP VẠCH DỪNG ---")
-    print("Do 'stop_line.json' không tồn tại, bạn cần thiết lập ngay bây giờ.")
-    print("1. Nhấn 'SPACE' để DỪNG video tại khung hình bạn muốn.")
-    print("2. Click chuột trái vào 2 điểm trên ảnh để vẽ vạch dừng.")
-    print("3. Nhấn 's' để LƯU và tiếp tục xử lý video.")
-    print("4. Nhấn 'r' để CHỌN LẠI điểm.")
-    print("5. Nhấn 'q' để THOÁT (sẽ dùng vạch mặc định).")
-    print("----------------------------------------\n")
-
-    while cap.isOpened():
-        if not _paused:
-            ret, frame = cap.read()
-            if not ret:
-                print("Hết video. Không thể thiết lập vạch dừng.")
-                break
-            _selected_frame = frame.copy()
-            display_frame = frame.copy()
-            cv2.putText(display_frame, "Dang Phat - Nhan SPACE de dung", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        else:
-            display_frame = _selected_frame.copy()
-            cv2.putText(display_frame, "Da Dung - Chon 2 diem roi nhan 's' de luu", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            if len(_points) > 0:
-                for point in _points:
-                    cv2.circle(display_frame, point, 5, (0, 255, 0), -1)
-            if len(_points) == 2:
-                cv2.line(display_frame, _points[0], _points[1], (0, 0, 255), 2)
-
-        cv2.imshow(window_name, display_frame)
-        key = cv2.waitKey(25) & 0xFF
-
-        if key == ord('q'):
-            print("Đã thoát chế độ thiết lập.")
-            break
-        elif key == ord(' '):
-            _paused = not _paused
-            if not _paused:
-                _points = [] # Reset points if user resumes video
-        
-        if _paused:
-            if key == ord('r'):
-                _points = []
-                print("Đã xóa điểm, vui lòng chọn lại.")
-            elif key == ord('s'):
-                if len(_points) == 2:
-                    with open('stop_line.json', 'w') as f:
-                        json.dump({'stop_line': _points}, f)
-                    print(f"Thành công! Đã lưu vạch dừng vào stop_line.json: {_points}")
-                    break
-                else:
-                    print("Vui lòng chọn đủ 2 điểm trước khi lưu.")
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-# --- Kết thúc phần tích hợp ---
+logger = logging.getLogger(__name__)
 
 class VideoProcessor:
-    def __init__(self, video_path):
-        self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
-        self.detector_manager = DetectorManager()
-        self.stop_line = self.load_stop_line()
+    """Xử lý video trong một luồng riêng để không làm treo giao diện web."""
 
-    def load_stop_line(self):
+    def __init__(self, video_path: str, detector: TrafficViolationDetector):
         """
-        Tải vạch dừng từ file. Nếu file không tồn tại,
-        mở chế độ thiết lập thủ công.
-        """
-        try:
-            with open('stop_line.json', 'r') as f:
-                data = json.load(f)
-                print("Đã tải vạch dừng từ 'stop_line.json'.")
-                return data['stop_line']
-        except FileNotFoundError:
-            print("Cảnh báo: Không tìm thấy 'stop_line.json'.")
-            setup_stop_line_interactively(self.video_path)
-            
-            # Sau khi thiết lập xong, thử tải lại file
-            try:
-                with open('stop_line.json', 'r') as f:
-                    data = json.load(f)
-                    print("Đã tải vạch dừng vừa được thiết lập.")
-                    return data['stop_line']
-            except FileNotFoundError:
-                print("Lỗi: Vẫn không thể đọc file stop_line.json. Sử dụng vạch dừng mặc định.")
-                width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                return [(0, height * 2 // 3), (width, height * 2 // 3)]
-
-    def process_video(self):
-        """
-        Xử lý video, phát hiện và lưu các vi phạm.
-        """
-        frame_nmr = 0
-        while self.cap.isOpened():
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-
-            # Bỏ qua một số frame để tăng tốc độ xử lý
-            frame_nmr += 1
-            if frame_nmr % 2 != 0:
-                continue
-
-            # TODO: Truyền self.stop_line vào detector_manager để xử lý logic vi phạm
-            # Ví dụ: results = self.detector_manager.detect(frame, self.stop_line)
-            results = self.detector_manager.detect(frame)
-            
-            # Vẽ vạch dừng lên video để trực quan
-            if self.stop_line:
-                cv2.line(frame, tuple(self.stop_line[0]), tuple(self.stop_line[1]), (0, 0, 255), 2)
-
-            # TODO: Xử lý logic phát hiện vi phạm dựa trên 'results' và 'self.stop_line'
-            # (Phần code này có thể đã nằm trong DetectorManager của bạn)
-
-            # Hiển thị video (tùy chọn, có thể xóa nếu chạy trên server)
-            # cv2.imshow('Video Processing', frame)
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
+        Khởi tạo VideoProcessor.
         
-        print("Đã xử lý xong video.")
-        self.cap.release()
-        cv2.destroyAllWindows()
+        Args:
+            video_path (str): Đường dẫn đến file video.
+            detector (TrafficViolationDetector): Đối tượng detector đã được khởi tạo sẵn.
+        """
+        self.video_path = video_path
+        self.detector = detector
+        self.violation_line_y = None
+        self.total_frames = 0
+        self.violations_data = []
+
+    def process_video(self, job_id: str, processing_status: dict, processing_results: dict, processing_lock: Lock):
+        """Hàm xử lý video chính, được chạy trong một luồng riêng."""
+        try:
+            cap = cv2.VideoCapture(self.video_path)
+            if not cap.isOpened():
+                raise IOError(f"Không thể mở file video: {self.video_path}")
+
+            self.total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            
+            self.violation_line_y = int(frame_height * 0.6)
+
+            output_path = os.path.join(config.PROCESSED_FOLDER, f'processed_{job_id}.mp4')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+
+            frame_count = 0
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frame_count += 1
+
+                red_lights, vehicles, violations_in_frame = [], [], []
+                if frame_count % config.DETECTION_INTERVAL == 0:
+                    red_lights, vehicles, violations_in_frame = self.detector.run_detection_on_frame(
+                        frame, self.violation_line_y
+                    )
+
+                    for v in violations_in_frame:
+                        self._handle_violation(v, frame, job_id, frame_count)
+                
+                frame_viz = self._draw_visualizations(frame, red_lights, vehicles, violations_in_frame)
+                out.write(frame_viz)
+
+                with processing_lock:
+                    processing_status[job_id] = {
+                        'status': 'processing',
+                        'progress': (frame_count / self.total_frames) * 100 if self.total_frames > 0 else 0,
+                        'violations_found': len(self.violations_data),
+                        'current_frame': frame_count,
+                        'total_frames': self.total_frames
+                    }
+
+            cap.release()
+            out.release()
+            
+            database.save_violations_to_db(job_id, self.violations_data)
+            
+            with processing_lock:
+                processing_status[job_id] = {
+                    'status': 'completed', 'progress': 100,
+                    'violations_found': len(self.violations_data),
+                    'output_video': os.path.basename(output_path), 
+                    'total_frames': self.total_frames
+                }
+                processing_results[job_id] = {
+                    'violations': self.violations_data, 'output_video': output_path
+                }
+            logger.info(f"Processing for job {job_id} completed. Found {len(self.violations_data)} violations.")
+
+        except Exception as e:
+            logger.error(f"Lỗi nghiêm trọng trong quá trình xử lý video {job_id}: {e}", exc_info=True)
+            with processing_lock:
+                processing_status[job_id] = {'status': 'error', 'error': str(e)}
+
+    def _handle_violation(self, violation, frame, job_id, frame_count):
+        """Xử lý khi một vi phạm được phát hiện."""
+        violation_id = len(self.violations_data) + 1
+        
+        violation_item = {
+            'id': violation_id,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'frame_number': frame_count,
+            'license_plate': violation.get('license_plate', 'N/A'),
+            'confidence': violation.get('license_plate_confidence', 0.0),
+            'bbox': violation['bbox']
+        }
+        self.violations_data.append(violation_item)
+
+        img_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
+        cv2.imwrite(img_path, frame)
+        
+    def _draw_visualizations(self, frame, red_lights, vehicles, violations_in_frame):
+        """Vẽ các bounding box và thông tin lên khung hình."""
+        frame_copy = frame.copy()
+
+        if self.violation_line_y:
+            cv2.line(frame_copy, (0, self.violation_line_y), (frame.shape[1], self.violation_line_y), (0, 255, 255), 2)
+            cv2.putText(frame_copy, 'VACH DUNG', (10, self.violation_line_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+        for (x, y, w, h) in red_lights:
+            cv2.rectangle(frame_copy, (x, y), (x+w, y+h), (0, 0, 255), 2)
+
+        for vehicle in vehicles:
+            is_violating = any(v['bbox'] == vehicle['bbox'] for v in violations_in_frame)
+            color = (0, 0, 255) if is_violating else (0, 255, 0)
+            thickness = 3 if is_violating else 2
+            x, y, w, h = vehicle['bbox']
+            cv2.rectangle(frame_copy, (x, y), (x+w, y+h), color, thickness)
+            if is_violating:
+                 cv2.putText(frame_copy, f"VI PHAM: {vehicle.get('license_plate', 'N/A')}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        return frame_copy
+
