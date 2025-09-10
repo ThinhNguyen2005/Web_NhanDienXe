@@ -15,29 +15,42 @@ def detect_red_lights(frame):
         list: Danh sách các bounding box (x, y, w, h) của đèn đỏ được phát hiện.
     """
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Ngưỡng màu đỏ (2 vùng: gần 0° và gần 180°)
+    lower_red1 = np.array([0, 99, 99])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([160, 100, 100])
+    upper_red2 = np.array([179, 255, 255])
 
-    # Dải màu đỏ trong không gian HSV
-    red_lower1 = np.array([0, 100, 100])
-    red_upper1 = np.array([10, 255, 255])
-    red_lower2 = np.array([160, 100, 100])
-    red_upper2 = np.array([180, 255, 255])
+    # Tạo mask cho cả 2 vùng
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    mask = cv2.bitwise_or(mask1, mask2)
 
-    mask1 = cv2.inRange(hsv, red_lower1, red_upper1)
-    mask2 = cv2.inRange(hsv, red_lower2, red_upper2)
-    red_mask = cv2.bitwise_or(mask1, mask2)
+    # Khử nhiễu
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Tìm contour
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    red_lights = []
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if area > 100:  # Lọc nhiễu
-            x, y, w, h = cv2.boundingRect(contour)
-            aspect_ratio = w / float(h)
-            if 0.7 <= aspect_ratio <= 1.3:
-                red_lights.append((x, y, w, h))
+    circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1.2, minDist=20,
+                               param1=50, param2=15, minRadius=5, maxRadius=50)
 
-    return red_lights
+    bboxes = []
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        # Lọc bỏ vùng nhỏ để tránh nhiễu
+        # if (w > 5 and h > 5):
+        if (w > 7 and h > 7) and (w < 50 and h < 50):
+            bboxes.append((x, y, w, h))
+    # if circles is not None:
+    #     circles = np.uint16(np.around(circles))
+    #     for (x, y, r) in circles[0, :]:
+    #         # Tạo bounding box từ hình tròn
+    #         bboxes.append((x-r, y-r, 2*r, 2*r))
+    return bboxes
 
 
 def detect_stop_line(frame, roi_height_ratio=0.25, white_thresh_v=200,
