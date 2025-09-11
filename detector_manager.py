@@ -9,6 +9,8 @@ from detector.traffic_light_detector import detect_red_lights
 from detector.vehicle_detector import VehicleDetector
 from detector.license_plate_detector import LicensePlateDetector
 
+from detector import trafficLightColor
+
 logger = logging.getLogger(__name__)
 
 class TrafficViolationDetector:
@@ -37,11 +39,12 @@ class TrafficViolationDetector:
         """
         red_lights = detect_red_lights(frame)
         vehicles = self.vehicle_detector.detect(frame)
-        
+        traffic_light_color = trafficLightColor.estimate_label(frame)
+
         violations_in_frame = []
         if red_lights: # Chỉ kiểm tra vi phạm khi có đèn đỏ
             for vehicle in vehicles:
-                if self._check_violation(vehicle, violation_line_y):
+                if self._check_violation(vehicle, violation_line_y, traffic_light_color):
                     # Trích xuất và gán thông tin biển số ngay khi phát hiện vi phạm
                     _, plate_text, plate_conf = self._extract_and_recognize_plate(frame, vehicle['bbox'])
                     vehicle['license_plate'] = plate_text
@@ -51,12 +54,12 @@ class TrafficViolationDetector:
         return red_lights, vehicles, violations_in_frame
 
     # --- Compatibility wrappers for older VideoProcessor API ---
-    def detect_red_lights(self, frame):
-        """Compatibility: detect red lights in a frame."""
-        try:
-            return detect_red_lights(frame)
-        except Exception:
-            return []
+    # def detect_red_lights(self, frame):
+    #     """Compatibility: detect red lights in a frame."""
+    #     try:
+    #         return detect_red_lights(frame)
+    #     except Exception:
+    #         return []
 
     def detect_vehicles(self, frame):
         """Compatibility: detect vehicles in a frame."""
@@ -96,11 +99,21 @@ class TrafficViolationDetector:
         except Exception:
             return None, 'ERROR', 0.0
 
-    def _check_violation(self, vehicle, violation_line_y):
-        """Kiểm tra logic vi phạm: xe vượt vạch dừng."""
+    def _check_violation(self, vehicle, violation_line_y, traffic_light_color):
+    
+        # Lấy tọa độ và chiều cao của bounding box
         _, y, _, h = vehicle['bbox']
-        vehicle_bottom_y = y + h
-        return vehicle_bottom_y > violation_line_y
+
+        # Tính tọa độ y của tâm xe
+        # Trong OpenCV, tọa độ y bắt đầu từ 0 ở trên cùng, nên tâm xe vượt qua vạch
+        # khi tọa độ y của nó NHỎ HƠN tọa độ y của vạch.
+        vehicle_center_y = y + (h / 2)
+
+        # Kiểm tra đồng thời hai điều kiện: xe đã vượt vạch VÀ đèn đang đỏ.
+        if vehicle_center_y < violation_line_y and traffic_light_color == "red":
+            return True
+
+        return False
 
     def _extract_and_recognize_plate(self, frame, vehicle_bbox):
         """Trích xuất vùng ảnh của xe và gọi module nhận dạng biển số."""
