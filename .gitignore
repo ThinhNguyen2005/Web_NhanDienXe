@@ -6,3 +6,4 @@ processed/
 violations/
 # Ignore database files
 *.db
+uploads/
