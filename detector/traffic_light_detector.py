@@ -3,54 +3,43 @@ Module chuyên xử lý phát hiện đèn tín hiệu giao thông.
 """
 import cv2
 import numpy as np
+try:
+    from . import trafficLightColor
+except ImportError:
+    import trafficLightColor
+
+from ultralytics import YOLO
+
+import os
+
+# Đường dẫn tới thư mục YOLO (chứa 3 file: coco.names, yolov3.cfg, yolov3.weights)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # detector/
+PROJECT_DIR = os.path.dirname(BASE_DIR)                # Web_NhanDienXe/
+yolo_path = os.path.join(PROJECT_DIR, "yolo-coco")
+
+# Load class labels
+labelsPath = os.path.sep.join([yolo_path, "coco.names"])
+LABELS = open(labelsPath).read().strip().split("\n")
+
+# Load YOLOv8 model
+model = YOLO(os.path.join(PROJECT_DIR, "yolov8n.pt"))
+
+# Hàm phát hiện đèn đỏ bằng YOLOv8
+# Trả về danh sách bounding box [(x, y, w, h), ...] của đèn đỏ
 
 def detect_red_lights(frame):
-    """
-    Phát hiện đèn tín hiệu màu đỏ trong một khung hình bằng phương pháp nhận dạng màu sắc.
-
-    Args:
-        frame (numpy.ndarray): Khung hình đầu vào (định dạng BGR).
-
-    Returns:
-        list: Danh sách các bounding box (x, y, w, h) của đèn đỏ được phát hiện.
-    """
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-    # Ngưỡng màu đỏ (2 vùng: gần 0° và gần 180°)
-    lower_red1 = np.array([0, 99, 99])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([160, 100, 100])
-    upper_red2 = np.array([179, 255, 255])
-
-    # Tạo mask cho cả 2 vùng
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    mask = cv2.bitwise_or(mask1, mask2)
-
-    # Khử nhiễu
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-    # Tìm contour
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    circles = cv2.HoughCircles(mask, cv2.HOUGH_GRADIENT, dp=1.2, minDist=20,
-                               param1=50, param2=15, minRadius=5, maxRadius=50)
-
-    bboxes = []
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        # Lọc bỏ vùng nhỏ để tránh nhiễu
-        # if (w > 5 and h > 5):
-        if (w > 7 and h > 7) and (w < 50 and h < 50):
-            bboxes.append((x, y, w, h))
-    # if circles is not None:
-    #     circles = np.uint16(np.around(circles))
-    #     for (x, y, r) in circles[0, :]:
-    #         # Tạo bounding box từ hình tròn
-    #         bboxes.append((x-r, y-r, 2*r, 2*r))
-    return bboxes
+    results = model(frame)
+    red_lights = []
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            label = model.names[cls]
+            if label == "traffic light":
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                roi = frame[y1:y2, x1:x2]
+                if roi.size > 0 and trafficLightColor.estimate_label(roi) == "red":
+                    red_lights.append((x1, y1, x2-x1, y2-y1))
+    return red_lights
 
 
 def detect_stop_line(frame, roi_height_ratio=0.25, white_thresh_v=200,
