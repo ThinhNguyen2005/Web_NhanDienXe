@@ -19,8 +19,7 @@ import database
 from detector_manager import TrafficViolationDetector
 from video_processor import VideoProcessor
 from roi_manager_enhanced import save_rois, load_rois
-import cv2
-import numpy as np
+# import numpy as np
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
