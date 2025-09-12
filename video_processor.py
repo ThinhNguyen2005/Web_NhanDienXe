@@ -154,6 +154,9 @@ class VideoProcessor:
         }
         self.violations_data.append(violation_item)
 
+        # Lưu crop ảnh xe vi phạm thay vì cả frame
+        x, y, w, h = violation['bbox']
+        cropped = frame[y:y+h, x:x+w]
         img_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
-        cv2.imwrite(img_path, frame)
-
+        cv2.imwrite(img_path, cropped)
+        
