@@ -3,12 +3,12 @@
 
 <div class="container my-4">
     <h1 class="mb-4">Thiết lập vùng ROI</h1>
-    
+
     <div class="alert alert-info mb-4">
-        <i class="fas fa-info-circle"></i> 
+        <i class="fas fa-info-circle"></i>
         Thiết lập vùng ROI (Region of Interest) để xác định vùng chờ và vùng vi phạm cho hệ thống nhận diện xe vi phạm.
     </div>
-    
+
     <div class="row">
         <div class="col-md-8">
             <div class="card mb-4">
@@ -19,7 +19,8 @@
                     <!-- Khung chứa video và canvas -->
                     <div class="position-relative">
                         <video id="videoSource" src="" class="d-none" controls></video>
-                        <canvas id="videoCanvas" class="w-100" style="background-color: #eee; min-height: 400px;"></canvas>
+                        <canvas id="videoCanvas" class="w-100"
+                            style="background-color: #eee; min-height: 400px;"></canvas>
                     </div>
                 </div>
                 <div class="card-footer">
@@ -51,17 +52,12 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label for="cameraId" class="form-label">Camera ID</label>
-                        <input type="text" id="cameraId" class="form-control" placeholder="Nhập ID của camera (vd: camera_1)">
+                        <input type="text" id="cameraId" class="form-control"
+                            placeholder="Nhập ID của camera (vd: camera_1)">
                     </div>
-                    
-                                    <div class="mb-3">
-                        <button id="btnAutoDetect" class="btn btn-info w-100">
-                            <i class="fas fa-magic"></i> Tự động phát hiện vùng ROI
-                        </button>
-                    </div>
-                    
+
                     <hr>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">Vùng ROI</label>
                         <div class="alert alert-warning">
@@ -79,19 +75,23 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <hr>
-                    
-                    <div class="d-grid">
+
+                    <div class="d-grid gap-2">
                         <button id="btnSaveROI" class="btn btn-primary btn-lg">
                             <i class="fas fa-save"></i> Lưu thiết lập
+                        </button>
+                        <button id="btnProcessVideo" class="btn btn-success btn-lg" disabled
+                            title="Vui lòng lưu thiết lập ROI trước">
+                            <i class="fas fa-cog"></i> Xử lý video
                         </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <div class="card mt-4">
         <div class="card-header bg-info text-white">
             <h5 class="card-title mb-0">Hướng dẫn sử dụng</h5>
@@ -105,7 +105,7 @@
                 <li>Nhấn <strong>Vẽ vùng vi phạm</strong> và click chuột để tạo đa giác vùng vi phạm (màu đỏ)</li>
                 <li>Nhập ID của camera và nhấn <strong>Lưu thiết lập</strong></li>
             </ol>
-            
+
             <h5>Giải thích:</h5>
             <ul>
                 <li><strong>Vùng chờ (màu vàng):</strong> Khu vực xe được phép dừng chờ đèn</li>
@@ -120,44 +120,69 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/stop_line_adjuster.js') }}"></script>
 <script>
+    // Hàm này giữ nguyên
     function loadSelectedVideo() {
         const videoSelect = document.getElementById('videoSelect');
         const videoPath = videoSelect.value;
         const videoSource = document.getElementById('videoSource');
-        
+
         if (videoPath) {
             videoSource.src = "/api/get_video/" + videoPath;
             videoSource.load();
-            
-            // Hiển thị video frame đầu tiên trên canvas
-            videoSource.onloadeddata = function() {
+            videoSource.onloadeddata = function () {
                 window.roiAdjuster.updateCanvas();
             };
         }
     }
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        const btnPlayPause = document.getElementById('btnPlayPause');
+
+    // Logic mới được thêm vào và tối ưu hóa
+    document.addEventListener('DOMContentLoaded', function () {
+        const videoSelect = document.getElementById('videoSelect');
         const videoSource = document.getElementById('videoSource');
+        const btnPlayPause = document.getElementById('btnPlayPause');
         const btnReset = document.getElementById('btnReset');
-        const cameraId = document.getElementById('cameraId');
-        
+        const cameraIdInput = document.getElementById('cameraId');
+        const btnProcessVideo = document.getElementById('btnProcessVideo');
+
         // Khởi tạo ROI adjuster
         window.roiAdjuster = new RoiAdjuster('videoCanvas', 'videoSource');
-        
-        // Tải ROI khi thay đổi camera ID
-        cameraId.addEventListener('change', function() {
-            if (cameraId.value) {
-                window.roiAdjuster.loadROI(cameraId.value);
+
+        // --- TỰ ĐỘNG TẢI VIDEO VỪA UPLOAD ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoForSetup = urlParams.get('video_for_setup');
+
+        if (videoForSetup) {
+            // Tìm và chọn đúng video trong dropdown
+            for (let i = 0; i < videoSelect.options.length; i++) {
+                if (videoSelect.options[i].value === videoForSetup) {
+                    videoSelect.selectedIndex = i;
+                    break;
+                }
+            }
+
+            // Tự động tải video lên canvas
+            loadSelectedVideo();
+
+            // --- SỬA LỖI: Chuẩn hóa đường dẫn ---
+            const normalizedPath = videoForSetup.replace(/\\/g, "/");
+            const filename = normalizedPath.split('/').pop();
+            const cameraIdFromFile = filename.substring(0, filename.lastIndexOf('.'));
+            cameraIdInput.value = cameraIdFromFile;
+            cameraIdInput.dispatchEvent(new Event('change'));
+            // --- KẾT THÚC SỬA LỖI ---
+        }
+
+        // --- CÁC SỰ KIỆN CHO NÚT BẤM ---
+        cameraIdInput.addEventListener('change', function () {
+            if (this.value) {
+                window.roiAdjuster.loadROI(this.value);
             }
         });
-        
-        btnPlayPause.addEventListener('click', function() {
+
+        btnPlayPause.addEventListener('click', function () {
             if (videoSource.paused || videoSource.ended) {
                 videoSource.play();
-                btnPlayPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
-                
-                // Cập nhật canvas liên tục
+                this.innerHTML = '<i class="fas fa-pause"></i> Pause';
                 function updateCanvasLoop() {
                     if (!videoSource.paused) {
                         window.roiAdjuster.updateCanvas();
@@ -167,20 +192,33 @@
                 updateCanvasLoop();
             } else {
                 videoSource.pause();
-                btnPlayPause.innerHTML = '<i class="fas fa-play"></i> Play';
+                this.innerHTML = '<i class="fas fa-play"></i> Play';
             }
         });
-        
-        btnReset.addEventListener('click', function() {
-            window.roiAdjuster.reset();
-        });
-        
-        btnCapture.addEventListener('click', function() {
+
+        btnReset.addEventListener('click', () => window.roiAdjuster.reset());
+
+        btnCapture.addEventListener('click', () => {
             if (videoSource.src) {
                 videoSource.pause();
                 btnPlayPause.innerHTML = '<i class="fas fa-play"></i> Play';
                 window.roiAdjuster.updateCanvas();
             }
+        });
+        // Mã mới đã được sửa
+        // Sự kiện cho nút "Xử lý video"
+        btnProcessVideo.addEventListener('click', function () {
+            const selectedVideoPath = videoSelect.value;
+            if (!selectedVideoPath) {
+                alert('Lỗi: Không tìm thấy video được chọn.');
+                return;
+            }
+            // Chuẩn hóa đường dẫn để xử lý cả '/' và '\'
+            const normalizedPath = selectedVideoPath.replace(/\\/g, "/");
+            const filename = normalizedPath.split('/').pop(); // Lấy tên file sau dấu '/' cuối cùng
+
+            // Chuyển hướng đến trang xử lý với tên file chính xác
+            window.location.href = `/process/${filename}`;
         });
     });
 </script>

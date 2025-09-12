@@ -8,14 +8,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Thư mục lưu ROI và stopline
+# Thư mục lưu ROI
 ROI_DIR = os.path.join("config", "rois")
 os.makedirs(ROI_DIR, exist_ok=True)
-
+#tạo thư mục lưu file json
 def roi_path(camera_id):
     """Đường dẫn đến file cấu hình ROI"""
     return os.path.join(ROI_DIR, f"{camera_id}.json")
-
+#lưu các điểm vẽ vùng chờ và vùng vi phạm
 def save_rois(camera_id, waiting_pts, violation_pts):
     """
     Lưu cấu hình ROI với vùng chờ và vùng vi phạm
@@ -36,7 +36,7 @@ def save_rois(camera_id, waiting_pts, violation_pts):
     logger.info(f"Đã lưu ROI cho camera {camera_id}: {len(waiting_pts)} điểm vùng chờ, "
                 f"{len(violation_pts)} điểm vùng vi phạm")
     return True
-
+# đọc các điểm vẽ vùng chờ và vùng vi phạm từ file json
 def load_rois(camera_id):
     """
     Đọc cấu hình ROI từ file
@@ -61,7 +61,7 @@ def load_rois(camera_id):
     except Exception as e:
         logger.error(f"Lỗi khi đọc ROI từ {p}: {e}")
         return [], []
-
+# kiểm tra điểm có nằm trong đa giác không
 def point_in_polygon(point_xy, polygon_pts):
     """
     Kiểm tra điểm có nằm trong đa giác không
@@ -79,7 +79,7 @@ def point_in_polygon(point_xy, polygon_pts):
     cnt = np.array(polygon_pts, dtype=np.int32)
     res = cv2.pointPolygonTest(cnt, point_xy, False)
     return res >= 0
-
+# kiểm tra vi phạm dựa trên roi và đèn giao thông
 def check_violation_with_roi(vehicle_bbox, violation_zone_pts, waiting_zone_pts, traffic_light_color):
     """
     Kiểm tra vi phạm dựa trên ROI và đèn tín hiệu
@@ -114,7 +114,7 @@ def check_violation_with_roi(vehicle_bbox, violation_zone_pts, waiting_zone_pts,
             return True  # Vi phạm
     
     return False
-
+# hiển thị vùng chờ và vùng vi phạm lên khung hình
 def visualize_roi(frame, waiting_pts=None, violation_pts=None):
     """
     Vẽ vùng ROI (vùng chờ và vùng vi phạm) lên frame
@@ -140,7 +140,7 @@ def visualize_roi(frame, waiting_pts=None, violation_pts=None):
         
         # Thêm label
         cv2.putText(
-            frame_viz, "VÙNG CHỜ", (waiting_pts_arr[0][0], waiting_pts_arr[0][1] - 10), 
+            frame_viz, "Vung cho", (waiting_pts_arr[0][0], waiting_pts_arr[0][1] - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     
     # Vẽ vùng vi phạm (màu đỏ nhạt)
@@ -153,61 +153,61 @@ def visualize_roi(frame, waiting_pts=None, violation_pts=None):
         
         # Thêm label
         cv2.putText(
-            frame_viz, "VÙNG VI PHẠM", (violation_pts_arr[0][0], violation_pts_arr[0][1] - 10), 
+            frame_viz, "Vung vi pham", (violation_pts_arr[0][0], violation_pts_arr[0][1] - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     
     return frame_viz
 
-def auto_detect_roi(frame):
-    """
-    Tự động phát hiện và đề xuất vùng ROI dựa trên hình ảnh
+# def auto_detect_roi(frame):
+#     """
+#     Tự động phát hiện và đề xuất vùng ROI dựa trên hình ảnh
     
-    Args:
-        frame: Frame hình ảnh
+#     Args:
+#         frame: Frame hình ảnh
     
-    Returns:
-        tuple: (waiting_pts, violation_pts) với các điểm tự động phát hiện
-              hoặc ([], []) nếu không phát hiện được
-    """
-    from detector.traffic_light_detector import detect_red_lights
+#     Returns:
+#         tuple: (waiting_pts, violation_pts) với các điểm tự động phát hiện
+#               hoặc ([], []) nếu không phát hiện được
+#     """
+#     from detector.traffic_light_detector import detect_red_lights
     
-    h, w = frame.shape[:2]
-    waiting_pts = []
-    violation_pts = []
+#     h, w = frame.shape[:2]
+#     waiting_pts = []
+#     violation_pts = []
     
-    # Phát hiện đèn đỏ để tìm khu vực giao lộ
-    red_lights = detect_red_lights(frame)
+#     # Phát hiện đèn đỏ để tìm khu vực giao lộ
+#     red_lights = detect_red_lights(frame)
     
-    # Nếu không tìm thấy đèn đỏ, trả về rỗng
-    if not red_lights:
-        return [], []
+#     # Nếu không tìm thấy đèn đỏ, trả về rỗng
+#     if not red_lights:
+#         return [], []
     
-    # Lấy đèn đỏ đầu tiên làm tham chiếu
-    traffic_light = red_lights[0]
-    x, y, tw, th = traffic_light
+#     # Lấy đèn đỏ đầu tiên làm tham chiếu
+#     traffic_light = red_lights[0]
+#     x, y, tw, th = traffic_light
     
-    # Tính toán vùng vi phạm (khu vực giao lộ)
-    # Thông thường là vùng phía trước đèn giao thông
-    margin_x = w // 4  # Mở rộng ra hai bên 1/4 chiều rộng
-    top_y = y + th + 20  # Bắt đầu ngay dưới đèn giao thông
-    bottom_y = int(h * 0.7)  # Kết thúc ở khoảng 70% chiều cao của frame
+#     # Tính toán vùng vi phạm (khu vực giao lộ)
+#     # Thông thường là vùng phía trước đèn giao thông
+#     margin_x = w // 4  # Mở rộng ra hai bên 1/4 chiều rộng
+#     top_y = y + th + 20  # Bắt đầu ngay dưới đèn giao thông
+#     bottom_y = int(h * 0.7)  # Kết thúc ở khoảng 70% chiều cao của frame
     
-    violation_pts = [
-        [max(0, x - margin_x), top_y],  # Trên trái
-        [min(w, x + tw + margin_x), top_y],  # Trên phải
-        [min(w, x + tw + margin_x), bottom_y],  # Dưới phải
-        [max(0, x - margin_x), bottom_y]  # Dưới trái
-    ]
+#     violation_pts = [
+#         [max(0, x - margin_x), top_y],  # Trên trái
+#         [min(w, x + tw + margin_x), top_y],  # Trên phải
+#         [min(w, x + tw + margin_x), bottom_y],  # Dưới phải
+#         [max(0, x - margin_x), bottom_y]  # Dưới trái
+#     ]
     
-    # Tính toán vùng chờ (khu vực trước vạch dừng)
-    waiting_top_y = bottom_y + 20  # Bắt đầu sau vùng vi phạm
-    waiting_bottom_y = h - 50  # Kết thúc gần cuối frame
+#     # Tính toán vùng chờ (khu vực trước vạch dừng)
+#     waiting_top_y = bottom_y + 20  # Bắt đầu sau vùng vi phạm
+#     waiting_bottom_y = h - 50  # Kết thúc gần cuối frame
     
-    waiting_pts = [
-        [max(0, x - margin_x), waiting_top_y],  # Trên trái
-        [min(w, x + tw + margin_x), waiting_top_y],  # Trên phải
-        [min(w, x + tw + margin_x), waiting_bottom_y],  # Dưới phải
-        [max(0, x - margin_x), waiting_bottom_y]  # Dưới trái
-    ]
+#     waiting_pts = [
+#         [max(0, x - margin_x), waiting_top_y],  # Trên trái
+#         [min(w, x + tw + margin_x), waiting_top_y],  # Trên phải
+#         [min(w, x + tw + margin_x), waiting_bottom_y],  # Dưới phải
+#         [max(0, x - margin_x), waiting_bottom_y]  # Dưới trái
+#     ]
     
-    return waiting_pts, violation_pts
+#     return waiting_pts, violation_pts

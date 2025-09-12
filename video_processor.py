@@ -6,10 +6,10 @@ import cv2
 import datetime
 import logging
 from threading import Lock
-from roi_manager_enhanced import load_rois, visualize_roi, check_violation_with_roi
+from roi_manager_enhanced import load_rois, visualize_roi
 
 # video_processor.py
-from detector.traffic_light_detector import detect_red_lights
+# from detector.traffic_light_detector import detect_red_lights
 import config
 import database
 from detector_manager import TrafficViolationDetector
@@ -52,21 +52,17 @@ class VideoProcessor:
             logger.info(f"Loaded ROI configuration:")
             logger.info(f"  - Waiting zone: {len(self.waiting_zone_pts)} points")
             logger.info(f"  - Violation zone: {len(self.violation_zone_pts)} points")
-            
-            # Nếu không có ROI được cấu hình, sử dụng auto-detect
-            if not self.violation_zone_pts:
-                logger.warning("No ROI configured, attempting auto-detection...")
-                ret, first_frame = cap.read()
-                if ret:
-                    from roi_manager_enhanced import auto_detect_roi
-                    auto_waiting, auto_violation = auto_detect_roi(first_frame)
-                    if auto_violation:
-                        self.waiting_zone_pts = auto_waiting
-                        self.violation_zone_pts = auto_violation
-                        logger.info("Auto-detected ROI zones successfully")
-                    else:
-                        logger.error("Could not auto-detect ROI")
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset to beginning
+
+            # Nếu chưa có ROI thì dừng xử lý và yêu cầu người dùng thiết lập
+            if not self.violation_zone_pts or not self.waiting_zone_pts:
+                logger.error("ROI chưa được thiết lập! Vui lòng thiết lập vùng chờ và vùng vi phạm trước khi xử lý video.")
+                with processing_lock:
+                    processing_status[job_id] = {
+                        'status': 'error',
+                        'error': 'ROI chưa được thiết lập! Vui lòng thiết lập vùng chờ và vùng vi phạm trước khi xử lý video.'
+                    }
+                cap.release()
+                return
             else:
                 logger.info("Using saved ROI configuration")
 
@@ -82,6 +78,7 @@ class VideoProcessor:
                 frame_count += 1
 
                 red_lights, vehicles, violations_in_frame = [], [], []
+                # Gọi detector để phát hiện vi phạm
                 if frame_count % config.DETECTION_INTERVAL == 0:
                     red_lights, vehicles, violations_in_frame = self.detector.run_detection_on_frame_with_roi(
                         frame, self.waiting_zone_pts, self.violation_zone_pts
@@ -159,4 +156,4 @@ class VideoProcessor:
         cropped = frame[y:y+h, x:x+w]
         img_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
         cv2.imwrite(img_path, cropped)
-        
+
