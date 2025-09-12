@@ -18,6 +18,9 @@ import config
 import database
 from detector_manager import TrafficViolationDetector
 from video_processor import VideoProcessor
+from roi_manager_enhanced import save_rois, load_rois, auto_detect_roi
+import cv2
+import numpy as np
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -27,6 +30,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
+
+# Đăng ký blueprint cho ROI routes
+# from routes.roi_routes import roi_routes
+# app.register_blueprint(roi_routes)
 
 # Tạo các thư mục cần thiết
 for folder in [config.UPLOAD_FOLDER, config.PROCESSED_FOLDER, config.VIOLATIONS_FOLDER]:
@@ -67,6 +74,125 @@ def allowed_file(filename):
 def index():
     """Trang chủ của ứng dụng."""
     return render_template('index.html')
+
+@app.route('/roi_config')
+def roi_config():
+    """
+    Trang cấu hình ROI và vạch dừng
+    """
+    # Lấy danh sách video đã upload
+    videos = []
+    
+    # Từ thư mục uploads
+    if os.path.exists(config.UPLOAD_FOLDER):
+        for file in os.listdir(config.UPLOAD_FOLDER):
+            if file.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                videos.append({
+                    'name': file,
+                    'path': os.path.join('uploads', file)
+                })
+    
+    # Từ thư mục processed
+    if os.path.exists(config.PROCESSED_FOLDER):
+        for file in os.listdir(config.PROCESSED_FOLDER):
+            if file.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                videos.append({
+                    'name': f"[Processed] {file}",
+                    'path': os.path.join('processed', file)
+                })
+    
+    return render_template('roi_config.html', videos=videos)
+
+@app.route('/api/get_video/<path:video_path>')
+def get_video(video_path):
+    """
+    Trả về file video để xem trong trình duyệt
+    """
+    if '..' in video_path or video_path.startswith('/'):
+        return "Access denied", 403
+    
+    full_path = os.path.join(config.PROJECT_ROOT, video_path)
+    if not os.path.exists(full_path):
+        return "File not found", 404
+    
+    return send_file(full_path)
+
+@app.route('/api/save_roi', methods=['POST'])
+def save_roi():
+    """
+    API để lưu cấu hình ROI
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"})
+        
+        camera_id = data.get('camera_id', 'default')
+        waiting_zone = data.get('waiting_zone', [])
+        violation_zone = data.get('violation_zone', [])
+        
+        save_rois(camera_id, waiting_zone, violation_zone)
+        
+        return jsonify({"success": True})
+    
+    except Exception as e:
+        logger.error(f"Error saving ROI: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/load_roi/<camera_id>')
+def load_roi(camera_id):
+    """
+    API để tải cấu hình ROI
+    """
+    try:
+        waiting_zone, violation_zone = load_rois(camera_id)
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "waiting_zone": waiting_zone,
+                "violation_zone": violation_zone
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"Error loading ROI: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/auto_detect_roi', methods=['POST'])
+def auto_detect_roi():
+    """
+    API để tự động phát hiện và đề xuất vùng ROI từ frame
+    """
+    try:
+        if 'frame' not in request.files:
+            return jsonify({"success": False, "error": "No frame provided"})
+        
+        frame_file = request.files['frame']
+        frame_bytes = frame_file.read()
+        
+        # Chuyển từ bytes sang numpy array
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if frame is None:
+            return jsonify({"success": False, "error": "Invalid frame format"})
+        
+        # Phát hiện vùng ROI tự động
+        waiting_zone, violation_zone = auto_detect_roi(frame)
+        
+        if waiting_zone and violation_zone:
+            return jsonify({
+                "success": True, 
+                "waiting_zone": waiting_zone,
+                "violation_zone": violation_zone
+            })
+        else:
+            return jsonify({"success": False, "error": "ROI could not be auto-detected"})
+    
+    except Exception as e:
+        logger.error(f"Error auto-detecting ROI: {e}")
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_video():

@@ -4,6 +4,9 @@ Chứa các hằng số và cài đặt chung cho toàn bộ dự án.
 """
 import os
 
+# Thư mục gốc của dự án
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 # Tên file cơ sở dữ liệu SQLite
 DATABASE_FILE = 'traffic_violations.db'
 
@@ -15,6 +18,9 @@ PROCESSED_FOLDER = 'processed'
 
 # Thư mục để lưu trữ hình ảnh của các vi phạm
 VIOLATIONS_FOLDER = 'violations'
+
+# Thư mục cấu hình ROI
+ROI_CONFIG_FOLDER = os.path.join('config', 'rois')
 
 # Các định dạng file video được phép tải lên
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}

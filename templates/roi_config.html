@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container my-4">
+    <h1 class="mb-4">Thiết lập vùng ROI</h1>
+    
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle"></i> 
+        Thiết lập vùng ROI (Region of Interest) để xác định vùng chờ và vùng vi phạm cho hệ thống nhận diện xe vi phạm.
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Vùng quan sát</h5>
+                </div>
+                <div class="card-body p-0">
+                    <!-- Khung chứa video và canvas -->
+                    <div class="position-relative">
+                        <video id="videoSource" src="" class="d-none" controls></video>
+                        <canvas id="videoCanvas" class="w-100" style="background-color: #eee; min-height: 400px;"></canvas>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="mb-3">
+                        <label for="videoSelect" class="form-label">Chọn video</label>
+                        <select id="videoSelect" class="form-select" onchange="loadSelectedVideo()">
+                            <option value="">-- Chọn video --</option>
+                            {% for video in videos %}
+                            <option value="{{ video.path }}">{{ video.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <button id="btnPlayPause" class="btn btn-secondary">
+                            <i class="fas fa-play"></i> Play
+                        </button>
+                        <button id="btnCapture" class="btn btn-primary">
+                            <i class="fas fa-camera"></i> Chụp khung hình hiện tại
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">Công cụ thiết lập</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="cameraId" class="form-label">Camera ID</label>
+                        <input type="text" id="cameraId" class="form-control" placeholder="Nhập ID của camera (vd: camera_1)">
+                    </div>
+                    
+                                    <div class="mb-3">
+                        <button id="btnAutoDetect" class="btn btn-info w-100">
+                            <i class="fas fa-magic"></i> Tự động phát hiện vùng ROI
+                        </button>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Vùng ROI</label>
+                        <div class="alert alert-warning">
+                            <small>Nhấn nút tương ứng và click chuột vào video để tạo các điểm tạo vùng đa giác.</small>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button id="btnDrawWaitingZone" class="btn btn-warning mb-2">
+                                <i class="fas fa-draw-polygon"></i> Vẽ vùng chờ
+                            </button>
+                            <button id="btnDrawViolationZone" class="btn btn-danger mb-2">
+                                <i class="fas fa-draw-polygon"></i> Vẽ vùng vi phạm
+                            </button>
+                            <button id="btnReset" class="btn btn-secondary mb-2">
+                                <i class="fas fa-undo"></i> Làm lại
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="d-grid">
+                        <button id="btnSaveROI" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save"></i> Lưu thiết lập
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="card-title mb-0">Hướng dẫn sử dụng</h5>
+        </div>
+        <div class="card-body">
+            <h5>Các bước thiết lập:</h5>
+            <ol>
+                <li>Chọn video từ danh sách hoặc chụp khung hình từ video</li>
+                <li>Nhấn <strong>Tự động phát hiện vùng ROI</strong> hoặc vẽ thủ công</li>
+                <li>Nhấn <strong>Vẽ vùng chờ</strong> và click chuột để tạo đa giác vùng chờ (màu vàng)</li>
+                <li>Nhấn <strong>Vẽ vùng vi phạm</strong> và click chuột để tạo đa giác vùng vi phạm (màu đỏ)</li>
+                <li>Nhập ID của camera và nhấn <strong>Lưu thiết lập</strong></li>
+            </ol>
+            
+            <h5>Giải thích:</h5>
+            <ul>
+                <li><strong>Vùng chờ (màu vàng):</strong> Khu vực xe được phép dừng chờ đèn</li>
+                <li><strong>Vùng vi phạm (màu đỏ):</strong> Khu vực xe không được phép vào khi đèn đỏ</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/stop_line_adjuster.js') }}"></script>
+<script>
+    function loadSelectedVideo() {
+        const videoSelect = document.getElementById('videoSelect');
+        const videoPath = videoSelect.value;
+        const videoSource = document.getElementById('videoSource');
+        
+        if (videoPath) {
+            videoSource.src = "/api/get_video/" + videoPath;
+            videoSource.load();
+            
+            // Hiển thị video frame đầu tiên trên canvas
+            videoSource.onloadeddata = function() {
+                window.roiAdjuster.updateCanvas();
+            };
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const btnPlayPause = document.getElementById('btnPlayPause');
+        const videoSource = document.getElementById('videoSource');
+        const btnReset = document.getElementById('btnReset');
+        const cameraId = document.getElementById('cameraId');
+        
+        // Khởi tạo ROI adjuster
+        window.roiAdjuster = new RoiAdjuster('videoCanvas', 'videoSource');
+        
+        // Tải ROI khi thay đổi camera ID
+        cameraId.addEventListener('change', function() {
+            if (cameraId.value) {
+                window.roiAdjuster.loadROI(cameraId.value);
+            }
+        });
+        
+        btnPlayPause.addEventListener('click', function() {
+            if (videoSource.paused || videoSource.ended) {
+                videoSource.play();
+                btnPlayPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
+                
+                // Cập nhật canvas liên tục
+                function updateCanvasLoop() {
+                    if (!videoSource.paused) {
+                        window.roiAdjuster.updateCanvas();
+                        requestAnimationFrame(updateCanvasLoop);
+                    }
+                }
+                updateCanvasLoop();
+            } else {
+                videoSource.pause();
+                btnPlayPause.innerHTML = '<i class="fas fa-play"></i> Play';
+            }
+        });
+        
+        btnReset.addEventListener('click', function() {
+            window.roiAdjuster.reset();
+        });
+        
+        btnCapture.addEventListener('click', function() {
+            if (videoSource.src) {
+                videoSource.pause();
+                btnPlayPause.innerHTML = '<i class="fas fa-play"></i> Play';
+                window.roiAdjuster.updateCanvas();
+            }
+        });
+    });
+</script>
+{% endblock %}

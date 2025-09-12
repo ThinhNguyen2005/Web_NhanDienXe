@@ -25,6 +25,42 @@ class TrafficViolationDetector:
         self.lp_detector = LicensePlateDetector()
         logger.info("✓ All detection modules initialized.")
 
+    def run_detection_on_frame_with_roi(self, frame, waiting_zone_pts, violation_zone_pts):
+        """
+        Thực hiện toàn bộ quy trình phát hiện trên một khung hình sử dụng ROI.
+        
+        Args:
+            frame (numpy.ndarray): Khung hình cần xử lý.
+            waiting_zone_pts: Danh sách điểm [(x,y), ...] tạo vùng chờ
+            violation_zone_pts: Danh sách điểm [(x,y), ...] tạo vùng vi phạm
+            
+        Returns:
+            tuple: (red_lights, vehicles, violations_in_frame)
+        """
+        from roi_manager_enhanced import check_violation_with_roi
+        
+        # Debug log để verify ROI được truyền đúng
+        logger.info(f"ROI Detection: {len(waiting_zone_pts)} waiting, {len(violation_zone_pts)} violation points")
+        
+        red_lights = detect_red_lights(frame)
+        vehicles = self.vehicle_detector.detect(frame)
+        traffic_light_color = trafficLightColor.estimate_label(frame)
+
+        violations_in_frame = []
+        if red_lights:  # Chỉ kiểm tra vi phạm khi có đèn đỏ
+            for vehicle in vehicles:
+                if check_violation_with_roi(vehicle['bbox'], violation_zone_pts, waiting_zone_pts, traffic_light_color):
+                    # Trích xuất và gán thông tin biển số ngay khi phát hiện vi phạm
+                    _, plate_text, plate_conf = self._extract_and_recognize_plate(frame, vehicle['bbox'])
+                    vehicle['license_plate'] = plate_text
+                    vehicle['license_plate_confidence'] = plate_conf
+                    violations_in_frame.append(vehicle)
+                    logger.info(f"VIOLATION: {plate_text} (confidence: {plate_conf:.2f})")
+        else:
+            logger.debug("No red lights detected")
+
+        return red_lights, vehicles, violations_in_frame
+
     def run_detection_on_frame(self, frame, violation_line_y):
         """
         Thực hiện toàn bộ quy trình phát hiện trên một khung hình.

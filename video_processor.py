@@ -5,10 +5,11 @@ import os
 import cv2
 import datetime
 import logging
-import imutils
 from threading import Lock
+from roi_manager_enhanced import load_rois, visualize_roi, check_violation_with_roi
+
 # video_processor.py
-from detector.traffic_light_detector import detect_stop_line, detect_stop_line_enhanced, detect_red_lights, detect_stop_line_by_traffic_light
+from detector.traffic_light_detector import detect_red_lights
 import config
 import database
 from detector_manager import TrafficViolationDetector
@@ -28,12 +29,13 @@ class VideoProcessor:
         """
         self.video_path = video_path
         self.detector = detector
-        self.violation_line_y = None
         self.total_frames = 0
         self.violations_data = []
+        self.waiting_zone_pts = []
+        self.violation_zone_pts = []
 
     def process_video(self, job_id: str, processing_status: dict, processing_results: dict, processing_lock: Lock):
-        """Hàm xử lý video chính, được chạy trong một luồng riêng."""
+        """Hàm xử lý video chính, được chạy trong một luồng riêng sử dụng ROI."""
         try:
             cap = cv2.VideoCapture(self.video_path)
             if not cap.isOpened():
@@ -44,48 +46,29 @@ class VideoProcessor:
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            # Try to auto-detect stop line from multiple frames for better accuracy
-            detected_lines = []
-            traffic_light_pos = None
+            # Load ROI configuration (luôn dùng default)
+            self.waiting_zone_pts, self.violation_zone_pts = load_rois("default")
             
-            # First, try to detect traffic light position from first frame
-            ret, first_frame = cap.read()
-            if ret:
-                red_lights = detect_red_lights(first_frame)
-                if red_lights:
-                    # Use the first detected traffic light
-                    traffic_light_pos = red_lights[0]
-                    logger.info(f"✓ Detected traffic light at position: {traffic_light_pos}")
+            logger.info(f"Loaded ROI configuration:")
+            logger.info(f"  - Waiting zone: {len(self.waiting_zone_pts)} points")
+            logger.info(f"  - Violation zone: {len(self.violation_zone_pts)} points")
             
-            # Reset to beginning
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            
-            # Now detect stop lines using enhanced method
-            for i in range(min(20, self.total_frames // 15)):  # Check up to 20 frames, spaced 15 frames apart for better coverage
-                ret, frame = cap.read()
+            # Nếu không có ROI được cấu hình, sử dụng auto-detect
+            if not self.violation_zone_pts:
+                logger.warning("No ROI configured, attempting auto-detection...")
+                ret, first_frame = cap.read()
                 if ret:
-                    line_y = detect_stop_line_enhanced(frame, traffic_light_pos)
-                    if line_y is not None:
-                        detected_lines.append(line_y)
-                    elif traffic_light_pos is not None:
-                        # Fallback: try traffic light based detection
-                        line_y = detect_stop_line_by_traffic_light(frame, traffic_light_pos)
-                        if line_y is not None:
-                            detected_lines.append(line_y)
-                else:
-                    break
-            
-            if detected_lines:
-                # Use median to reduce outliers
-                import statistics
-                self.violation_line_y = int(statistics.median(detected_lines))
-                logger.info(f"✓ Auto-detected stop line at y={self.violation_line_y} (from {len(detected_lines)} frames, using traffic light guidance)")
+                    from roi_manager_enhanced import auto_detect_roi
+                    auto_waiting, auto_violation = auto_detect_roi(first_frame)
+                    if auto_violation:
+                        self.waiting_zone_pts = auto_waiting
+                        self.violation_zone_pts = auto_violation
+                        logger.info("Auto-detected ROI zones successfully")
+                    else:
+                        logger.error("Could not auto-detect ROI")
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset to beginning
             else:
-                self.violation_line_y = int(frame_height * 0.6)
-                logger.info(f"⚠ Could not detect stop line from {len(detected_lines)} frames, using default at y={self.violation_line_y}")
-            
-            # Reset video to beginning for processing
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                logger.info("Using saved ROI configuration")
 
             output_path = os.path.join(config.PROCESSED_FOLDER, f'processed_{job_id}.mp4')
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -100,38 +83,15 @@ class VideoProcessor:
 
                 red_lights, vehicles, violations_in_frame = [], [], []
                 if frame_count % config.DETECTION_INTERVAL == 0:
-                    red_lights, vehicles, violations_in_frame = self.detector.run_detection_on_frame(
-                        frame, self.violation_line_y
+                    red_lights, vehicles, violations_in_frame = self.detector.run_detection_on_frame_with_roi(
+                        frame, self.waiting_zone_pts, self.violation_zone_pts
                     )
 
                     for v in violations_in_frame:
                         self._handle_violation(v, frame, job_id, frame_count)
                 
-                frame_viz = frame.copy()
-                
-                # Vẽ vạch dừng (stop line) nếu đã phát hiện
-                if self.violation_line_y is not None:
-                    # Vẽ vùng màu đỏ nhạt phía trên vạch dừng (khu vực cấm)
-                    overlay = frame_viz.copy()
-                    cv2.rectangle(overlay, (0, 0), (frame_width, self.violation_line_y), (0, 0, 255), -1)
-                    cv2.addWeighted(overlay, 0.1, frame_viz, 0.9, 0, frame_viz)
-                    
-                    # Vẽ đường ngang màu xanh lá ở vị trí vạch dừng
-                    cv2.line(frame_viz, (0, self.violation_line_y), (frame_width, self.violation_line_y), (0, 255, 0), 4)
-                    
-                    # Thêm text label với background
-                    text = "STOP LINE"
-                    font_scale = 0.8
-                    font_thickness = 2
-                    (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)
-                    
-                    # Vẽ background cho text
-                    cv2.rectangle(frame_viz, (5, self.violation_line_y - text_height - 15), 
-                                (15 + text_width, self.violation_line_y - 5), (0, 0, 0), -1)
-                    
-                    # Vẽ text
-                    cv2.putText(frame_viz, text, (10, self.violation_line_y - 10), 
-                              cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), font_thickness)
+                # Vẽ frame với ROI visualization
+                frame_viz = visualize_roi(frame, self.waiting_zone_pts, self.violation_zone_pts)
                 
                 # Vẽ bounding boxes cho vehicles và violations
                 for vehicle in vehicles:
@@ -141,7 +101,9 @@ class VideoProcessor:
                     x, y, w, h = vehicle['bbox']
                     cv2.rectangle(frame_viz, (x, y), (x+w, y+h), color, thickness)
                     if is_violating:
-                        cv2.putText(frame_viz, f"VI PHAM: {vehicle.get('license_plate', 'N/A')}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                        cv2.putText(frame_viz, f"VI PHAM: {vehicle.get('license_plate', 'N/A')}", 
+                                   (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                
                 out.write(frame_viz)
                 
                 with processing_lock:
@@ -194,54 +156,4 @@ class VideoProcessor:
 
         img_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
         cv2.imwrite(img_path, frame)
-        
-    def _detect_stop_line_from_first_frame(self, frame):
-        """Phát hiện vạch dừng từ frame đầu tiên sử dụng thuật toán từ vachdung.py"""
-        if frame is None or frame.size == 0:
-            return None
-
-        # Resize frame (tương tự vachdung.py)
-        frame_resized = imutils.resize(frame, width=400)
-        
-        # Chuyển xám + bilateral filter
-        gray_image = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2GRAY)
-        gray_image = cv2.bilateralFilter(gray_image, 11, 17, 17)
-        
-        # Canny edge detection
-        edged = cv2.Canny(gray_image, 30, 200)
-        
-        # Tìm contours
-        cnts, _ = cv2.findContours(edged.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Sắp xếp theo diện tích và lấy top 10
-        cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:10]
-        
-        # Tìm vạch dừng từ contours (logic đơn giản hóa)
-        h, w = frame_resized.shape[:2]
-        candidate_lines = []
-        
-        for contour in cnts:
-            # Lấy bounding box của contour
-            x, y, cw, ch = cv2.boundingRect(contour)
-            
-            # Chỉ xét contours ở nửa dưới của frame
-            if y > h * 0.5:
-                # Tính slope của bounding box (nếu width > height thì có thể là đường ngang)
-                if cw > ch * 2:  # Contour rộng hơn cao nhiều lần
-                    center_y = y + ch // 2
-                    candidate_lines.append(center_y)
-        
-        if candidate_lines:
-            # Chọn median để giảm outliers
-            import statistics
-            try:
-                stop_line_y = int(statistics.median(candidate_lines))
-            except statistics.StatisticsError:
-                stop_line_y = int(sum(candidate_lines) / len(candidate_lines))
-            
-            # Scale lại về kích thước gốc
-            scale_factor = frame.shape[0] / frame_resized.shape[0]
-            return int(stop_line_y * scale_factor)
-        
-        return None
 
