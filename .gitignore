@@ -7,3 +7,4 @@ violations/
 # Ignore database files
 *.db
 uploads/
+rois/

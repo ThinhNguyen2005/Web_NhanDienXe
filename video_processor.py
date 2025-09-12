@@ -46,25 +46,32 @@ class VideoProcessor:
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            # Load ROI configuration (luôn dùng default)
-            self.waiting_zone_pts, self.violation_zone_pts = load_rois("default")
-            
-            logger.info(f"Loaded ROI configuration:")
-            logger.info(f"  - Waiting zone: {len(self.waiting_zone_pts)} points")
-            logger.info(f"  - Violation zone: {len(self.violation_zone_pts)} points")
+            # --- BẮT ĐẦU PHẦN SỬA LỖI LOGIC TẢI ROI ---
+            # Lấy camera_id từ tên file video để tải ROI tương ứng
+            camera_id = os.path.splitext(os.path.basename(self.video_path))[0]
+            self.waiting_zone_pts, self.violation_zone_pts = load_rois(camera_id)
 
-            # Nếu chưa có ROI thì dừng xử lý và yêu cầu người dùng thiết lập
-            if not self.violation_zone_pts or not self.waiting_zone_pts:
-                logger.error("ROI chưa được thiết lập! Vui lòng thiết lập vùng chờ và vùng vi phạm trước khi xử lý video.")
+            # Nếu không có ROI cho camera_id cụ thể, thử tải ROI "default"
+            if not self.violation_zone_pts:
+                logger.info(f"Không tìm thấy ROI cho '{camera_id}', thử tải ROI 'default'.")
+                self.waiting_zone_pts, self.violation_zone_pts = load_rois("default")
+
+            # Nếu vẫn không có ROI, dừng xử lý và báo lỗi
+            if not self.violation_zone_pts:
+                error_msg = f"Không có cấu hình ROI cho video '{camera_id}' hoặc 'default'. Vui lòng vào trang 'Thiết lập ROI' để cấu hình trước."
+                logger.error(error_msg)
                 with processing_lock:
                     processing_status[job_id] = {
                         'status': 'error',
-                        'error': 'ROI chưa được thiết lập! Vui lòng thiết lập vùng chờ và vùng vi phạm trước khi xử lý video.'
+                        'error': error_msg
                     }
                 cap.release()
                 return
-            else:
-                logger.info("Using saved ROI configuration")
+
+            logger.info(f"Đã tải cấu hình ROI cho '{camera_id}':")
+            logger.info(f"  - Vùng chờ: {len(self.waiting_zone_pts)} điểm")
+            logger.info(f"  - Vùng vi phạm: {len(self.violation_zone_pts)} điểm")
+            # --- KẾT THÚC PHẦN SỬA LỖI ---
 
             output_path = os.path.join(config.PROCESSED_FOLDER, f'processed_{job_id}.mp4')
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -137,6 +144,7 @@ class VideoProcessor:
             logger.error(f"Lỗi nghiêm trọng trong quá trình xử lý video {job_id}: {e}", exc_info=True)
             with processing_lock:
                 processing_status[job_id] = {'status': 'error', 'error': str(e)}
+
     def _handle_violation(self, violation, frame, job_id, frame_count):
         """Xử lý khi một vi phạm được phát hiện."""
         violation_id = len(self.violations_data) + 1
