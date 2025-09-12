@@ -22,7 +22,7 @@ labelsPath = os.path.sep.join([yolo_path, "coco.names"])
 LABELS = open(labelsPath).read().strip().split("\n")
 
 # Load YOLOv8 model
-model = YOLO(os.path.join(PROJECT_DIR, "yolov8n.pt"))
+model = YOLO(os.path.join(PROJECT_DIR, "yolo12s.pt"))
 
 # Hàm phát hiện đèn đỏ bằng YOLOv8
 # Trả về danh sách bounding box [(x, y, w, h), ...] của đèn đỏ

@@ -55,11 +55,6 @@ class RoiAdjuster {
     addListener('btnSaveROI', 'click', () => {
         this.saveROI();
     });
-    
-    addListener('btnAutoDetect', 'click', () => {
-        this.autoDetectROI();
-    });
-    
     // Khởi tạo kích thước canvas khi video được tải
     if (this.video) {
         this.video.addEventListener('loadedmetadata', () => {
@@ -197,48 +192,6 @@ class RoiAdjuster {
         console.error("Lỗi:", error);
         alert("Lỗi khi lưu ROI");
       });
-  }
-
-  autoDetectROI() {
-    // Cần một frame để phát hiện ROI
-    if (!this.video || this.video.readyState < 2) {
-      alert("Vui lòng chọn video trước!");
-      return;
-    }
-
-    // Lấy frame hiện tại từ video
-    const canvas = document.createElement("canvas");
-    canvas.width = this.video.videoWidth;
-    canvas.height = this.video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(this.video, 0, 0);
-
-    // Chuyển canvas thành blob
-    canvas.toBlob((blob) => {
-      const formData = new FormData();
-      formData.append("frame", blob);
-
-      // Gửi frame đến API để tự động phát hiện ROI
-      fetch("/api/auto_detect_roi", {
-        method: "POST",
-        body: formData,
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.success) {
-            this.waitingZone = data.waiting_zone;
-            this.violationZone = data.violation_zone;
-            this.updateCanvas();
-            alert("Đã tự động phát hiện ROI thành công!");
-          } else {
-            alert("Không thể tự động phát hiện ROI: " + data.error);
-          }
-        })
-        .catch((error) => {
-          console.error("Lỗi:", error);
-          alert("Lỗi khi tự động phát hiện ROI");
-        });
-    });
   }
 
   reset() {

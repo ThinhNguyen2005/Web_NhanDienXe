@@ -26,7 +26,7 @@
                 <div class="card-footer">
                     <div class="mb-3">
                         <label for="videoSelect" class="form-label">Chọn video</label>
-                        <select id="videoSelect" class="form-select" onchange="loadSelectedVideo()">
+                        <select id="videoSelect" class="form-select">
                             <option value="">-- Chọn video --</option>
                             {% for video in videos %}
                             <option value="{{ video.path }}">{{ video.name }}</option>
@@ -120,71 +120,50 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/stop_line_adjuster.js') }}"></script>
 <script>
-    // Hàm này giữ nguyên
-    function loadSelectedVideo() {
-        const videoSelect = document.getElementById('videoSelect');
-        const videoPath = videoSelect.value;
-        const videoSource = document.getElementById('videoSource');
-
-        if (videoPath) {
-            videoSource.src = "/api/get_video/" + videoPath;
-            videoSource.load();
-            videoSource.onloadeddata = function () {
-                window.roiAdjuster.updateCanvas();
-            };
-        }
-    }
-
-    // Logic mới được thêm vào và tối ưu hóa
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Định nghĩa tất cả các phần tử DOM ở đây ---
         const videoSelect = document.getElementById('videoSelect');
         const videoSource = document.getElementById('videoSource');
         const btnPlayPause = document.getElementById('btnPlayPause');
         const btnReset = document.getElementById('btnReset');
         const cameraIdInput = document.getElementById('cameraId');
         const btnProcessVideo = document.getElementById('btnProcessVideo');
+        const btnCapture = document.getElementById('btnCapture');
 
-        // Khởi tạo ROI adjuster
+        // --- Khởi tạo đối tượng chính ---
+        // Đảm bảo rằng đối tượng này chỉ được tạo sau khi DOM đã sẵn sàng
         window.roiAdjuster = new RoiAdjuster('videoCanvas', 'videoSource');
 
-        // --- TỰ ĐỘNG TẢI VIDEO VỪA UPLOAD ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const videoForSetup = urlParams.get('video_for_setup');
-
-        if (videoForSetup) {
-            // Tìm và chọn đúng video trong dropdown
-            for (let i = 0; i < videoSelect.options.length; i++) {
-                if (videoSelect.options[i].value === videoForSetup) {
-                    videoSelect.selectedIndex = i;
-                    break;
-                }
+        // --- Định nghĩa hàm tải video ---
+        function loadSelectedVideo() {
+            const videoPath = videoSelect.value;
+            if (videoPath) {
+                videoSource.src = "/api/get_video/" + videoPath;
+                videoSource.load();
+                // Sự kiện onloadeddata bây giờ chắc chắn sẽ tìm thấy window.roiAdjuster
+                videoSource.onloadeddata = function() {
+                    if (window.roiAdjuster) {
+                        window.roiAdjuster.updateCanvas();
+                    }
+                };
             }
-
-            // Tự động tải video lên canvas
-            loadSelectedVideo();
-
-            // --- SỬA LỖI: Chuẩn hóa đường dẫn ---
-            const normalizedPath = videoForSetup.replace(/\\/g, "/");
-            const filename = normalizedPath.split('/').pop();
-            const cameraIdFromFile = filename.substring(0, filename.lastIndexOf('.'));
-            cameraIdInput.value = cameraIdFromFile;
-            cameraIdInput.dispatchEvent(new Event('change'));
-            // --- KẾT THÚC SỬA LỖI ---
         }
 
-        // --- CÁC SỰ KIỆN CHO NÚT BẤM ---
-        cameraIdInput.addEventListener('change', function () {
-            if (this.value) {
+        // --- Gán tất cả các sự kiện ở đây ---
+        videoSelect.addEventListener('change', loadSelectedVideo);
+
+        cameraIdInput.addEventListener('change', function() {
+            if (this.value && window.roiAdjuster) {
                 window.roiAdjuster.loadROI(this.value);
             }
         });
 
-        btnPlayPause.addEventListener('click', function () {
+        btnPlayPause.addEventListener('click', function() {
             if (videoSource.paused || videoSource.ended) {
                 videoSource.play();
                 this.innerHTML = '<i class="fas fa-pause"></i> Pause';
                 function updateCanvasLoop() {
-                    if (!videoSource.paused) {
+                    if (!videoSource.paused && window.roiAdjuster) {
                         window.roiAdjuster.updateCanvas();
                         requestAnimationFrame(updateCanvasLoop);
                     }
@@ -196,30 +175,49 @@
             }
         });
 
-        btnReset.addEventListener('click', () => window.roiAdjuster.reset());
+        btnReset.addEventListener('click', () => {
+            if (window.roiAdjuster) window.roiAdjuster.reset();
+        });
 
         btnCapture.addEventListener('click', () => {
-            if (videoSource.src) {
+            if (videoSource.src && window.roiAdjuster) {
                 videoSource.pause();
                 btnPlayPause.innerHTML = '<i class="fas fa-play"></i> Play';
                 window.roiAdjuster.updateCanvas();
             }
         });
-        // Mã mới đã được sửa
-        // Sự kiện cho nút "Xử lý video"
-        btnProcessVideo.addEventListener('click', function () {
+
+        btnProcessVideo.addEventListener('click', function() {
             const selectedVideoPath = videoSelect.value;
             if (!selectedVideoPath) {
                 alert('Lỗi: Không tìm thấy video được chọn.');
                 return;
             }
-            // Chuẩn hóa đường dẫn để xử lý cả '/' và '\'
             const normalizedPath = selectedVideoPath.replace(/\\/g, "/");
-            const filename = normalizedPath.split('/').pop(); // Lấy tên file sau dấu '/' cuối cùng
-
-            // Chuyển hướng đến trang xử lý với tên file chính xác
+            const filename = normalizedPath.split('/').pop();
             window.location.href = `/process/${filename}`;
         });
+
+        // --- Logic tự động tải video sau khi upload ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const videoForSetup = urlParams.get('video_for_setup');
+        
+        if (videoForSetup) {
+            for (let i = 0; i < videoSelect.options.length; i++) {
+                if (videoSelect.options[i].value === videoForSetup) {
+                    videoSelect.selectedIndex = i;
+                    break;
+                }
+            }
+            
+            loadSelectedVideo(); // Tải video
+
+            const normalizedPath = videoForSetup.replace(/\\/g, "/");
+            const filename = normalizedPath.split('/').pop();
+            const cameraIdFromFile = filename.substring(0, filename.lastIndexOf('.'));
+            cameraIdInput.value = cameraIdFromFile;
+            cameraIdInput.dispatchEvent(new Event('change'));
+        }
     });
 </script>
 {% endblock %}
