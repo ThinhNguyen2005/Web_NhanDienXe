@@ -120,6 +120,14 @@
                                 <button id="btnSaveROI" type="button" class="btn btn-success btn-lg w-100 fw-bold rounded-pill">
                                     <i class="fas fa-save me-2"></i>Lưu Thiết Lập ROI
                                 </button>
+                                <!-- Alerts required by stop_line_adjuster.js -->
+                                <div id="roi-save-success-alert" class="alert alert-success d-none mt-3" role="alert">
+                                    <i class="fas fa-check-circle me-2"></i>Đã lưu ROI thành công!
+                                </div>
+                                <div id="roi-save-error-alert" class="alert alert-danger d-none mt-3" role="alert">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <span id="roi-error-message">Đã xảy ra lỗi khi lưu ROI.</span>
+                                </div>
                             </div>
 
                             <!-- Processing Options -->

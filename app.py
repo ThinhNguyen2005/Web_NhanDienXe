@@ -239,7 +239,7 @@ def show_results(job_id):
         status = processing_status.get(job_id, {})
         results = processing_results.get(job_id, {})
 
-    # Nếu không còn dữ liệu trong RAM, lấy từ database
+    # Nếu không còn dữ liệu trong RAM, hoặc status chưa completed -> lấy từ DB
     if not status or status.get('status') != 'completed':
         # Tạo status giả từ database
         violations = database.get_violations_by_job_id(job_id)
@@ -252,6 +252,12 @@ def show_results(job_id):
             'total_frames': total_frames
         }
         results = {'violations': violations}
+    else:
+        # Status đã completed trong RAM nhưng không có results -> fallback DB
+        if not results or not results.get('violations'):
+            violations = database.get_violations_by_job_id(job_id)
+            status.setdefault('violations_found', len(violations))
+            results = {'violations': violations}
 
     return render_template('results.html',
                           job_id=job_id,

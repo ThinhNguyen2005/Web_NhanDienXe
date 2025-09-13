@@ -161,7 +161,13 @@ class VideoProcessor:
             database.save_processed_video(job_id, os.path.basename(output_path))
             database.save_violations_to_db(job_id, self.violations_data)
             with processing_lock:
-                processing_status[job_id] = {'status': 'completed', 'output_video': os.path.basename(output_path)}
+                processing_status[job_id] = {
+                    'status': 'completed',
+                    'output_video': os.path.basename(output_path),
+                    'violations_found': len(self.violations_data)
+                }
+                # Lưu kết quả vào bộ nhớ để trang results dùng ngay, tránh hiển thị 0
+                processing_results[job_id] = {'violations': list(self.violations_data)}
             logger.info(f"Hoàn tất xử lý job {job_id}.")
         except Exception as e:
             logger.error(f"Lỗi nghiêm trọng: {e}", exc_info=True)
