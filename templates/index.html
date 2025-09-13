@@ -1,78 +1,66 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="jumbotron bg-danger text-white rounded p-5 mb-4">
-            <h1 class="display-4"><i class="fas fa-shield-alt"></i> Hệ thống phát hiện vi phạm giao thông</h1>
-            <p class="lead">Sử dụng AI để tự động phát hiện xe vi phạm đèn đỏ và nhận diện biển số xe</p>
-            <hr class="my-4">
-            <p>Upload video giao thông và nhận kết quả phân tích chi tiết</p>
-            <a class="btn btn-light btn-lg" href="{{ url_for('upload_video') }}" role="button">
-                <i class="fas fa-upload"></i> Bắt đầu ngay
-            </a>
-        </div>
+<section class="hero text-center">
+    <div class="container">
+        <h1 class="fw-bold">Hệ thống phát hiện xe vượt đèn đỏ</h1>
+        <p class="lead mt-3">Ứng dụng AI để phát hiện vi phạm và nhận diện biển số xe</p>
+        <a class="btn btn-light btn-lg mt-3 fw-bold" href="{{ url_for('upload_video') }}">
+            <i class="fas fa-upload"></i> Bắt đầu ngay
+        </a>
     </div>
-</div>
+</section>
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-video fa-3x text-danger mb-3"></i>
-                <h5 class="card-title">Upload Video</h5>
-                <p class="card-text">Upload video giao thông từ camera giám sát để phân tích</p>
-                <a href="{{ url_for('upload_video') }}" class="btn btn-primary">Upload ngay</a>
+<section class="container my-5">
+    <h3 class="text-center mb-4 fw-bold">✨ Tính năng nổi bật</h3>
+    <div class="row g-4 text-center">
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-danger"><i class="fas fa-video"></i></div>
+                <h5 class="mt-3">Upload Video</h5>
+                <p>Tải video từ camera giám sát để phân tích vi phạm.</p>
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-robot fa-3x text-success mb-3"></i>
-                <h5 class="card-title">AI Processing</h5>
-                <p class="card-text">Phát hiện tự động xe vi phạm đèn đỏ và nhận diện biển số</p>
-                <button class="btn btn-success" disabled>Tự động</button>
+        
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-success"><i class="fas fa-robot"></i></div>
+                <h5 class="mt-3">AI Nhận diện</h5>
+                <p>Tự động phát hiện xe vượt đèn đỏ và nhận diện biển số.</p>
             </div>
         </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-search fa-3x text-info mb-3"></i>
-                <h5 class="card-title">Tra cứu vi phạm</h5>
-                <p class="card-text">Tìm kiếm thông tin vi phạm theo biển số xe</p>
-                <a href="{{ url_for('search_violations') }}" class="btn btn-info">Tra cứu</a>
+        
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-primary"><i class="fas fa-search"></i></div>
+                <h5 class="mt-3">Tra cứu vi phạm</h5>
+                <p>Tìm kiếm thông tin vi phạm dựa vào biển số xe.</p>
             </div>
         </div>
-    </div>
-</div>
 
-<div class="row mt-5">
-    <div class="col-lg-10 mx-auto">
-        <h3><i class="fas fa-cogs"></i> Tính năng chính</h3>
-        <ul class="list-group list-group-flush">
-            <li class="list-group-item d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3"></i>
-                <strong>Phát hiện đèn đỏ:</strong> Sử dụng computer vision để phát hiện tín hiệu đèn giao thông
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3"></i>
-                <strong>Nhận diện xe:</strong> YOLO model phát hiện các loại xe trong video
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3"></i>
-                <strong>Nhận diện biển số:</strong> OCR technology đọc biển số xe vi phạm
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3"></i>
-                <strong>Lưu trữ database:</strong> Tự động lưu thông tin vi phạm vào cơ sở dữ liệu
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-                <i class="fas fa-check-circle text-success me-3"></i>
-                <strong>Tra cứu nhanh:</strong> Tìm kiếm vi phạm theo biển số xe
-            </li>
-        </ul>
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-warning"><i class="fas fa-car-side"></i></div>
+                <h5 class="mt-3">Nhận diện phương tiện</h5>
+                <p>Sử dụng YOLO để nhận diện các loại phương tiện.</p>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-info"><i class="fas fa-id-card"></i></div>
+                <h5 class="mt-3">Nhận diện biển số</h5>
+                <p>Sử dụng OCR để nhận diện biển số xe.</p>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card feature-card p-4 h-100">
+                <div class="fs-1 text-success"><i class="fas fa-database"></i></div>
+                <h5 class="mt-3">Lưu trữ & Tra cứu</h5>
+                <p>Lưu trữ dữ liệu vi phạm và tra cứu nhanh chóng.</p>
+            </div>
+        </div>
     </div>
-</div>
+</section>
 {% endblock %}

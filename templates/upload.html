@@ -1,63 +1,114 @@
 {% extends "base.html" %}
 
-{% block title %}Upload Video - Traffic Violation Detection{% endblock %}
+{% block title %}Upload Video - Traffic Violation{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h4><i class="fas fa-upload"></i> Upload Video Giao Thông</h4>
-            </div>
-            <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="video" class="form-label">Chọn file video:</label>
-                        <input type="file" class="form-control" id="video" name="video" 
-                               accept=".mp4,.avi,.mov,.mkv" required>
-                        <div class="form-text">
-                            Hỗ trợ các định dạng: MP4, AVI, MOV, MKV (tối đa 500MB)
+<section class="container my-5">
+    <div class="card shadow-lg border-0 rounded-4">
+        <div class="card-body p-5">
+            <h2 class="card-title text-center mb-5 fw-bold text-dark-blue">
+                <i class="fas fa-cloud-upload-alt me-3 text-primary"></i>Tải lên Video Vi phạm
+            </h2>
+
+            <form action="{{ url_for('upload_video') }}" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <div class="mb-4">
+                    <label for="videoFile" class="form-label fs-5 fw-semibold text-muted">Chọn tệp video:</label>
+                    <input class="form-control form-control-lg" type="file" id="videoFile" name="video" accept="video/mp4,video/avi,video/mov,video/mkv" required>
+                    <div class="form-text">Hỗ trợ các định dạng: MP4, AVI, MOV, MKV (tối đa 500MB).</div>
+                    <div class="invalid-feedback">Vui lòng chọn một tệp video.</div>
+                </div>
+
+                <div class="alert alert-info border-start border-primary border-4 p-4 mb-4 rounded-3 shadow-sm" role="alert">
+                    <h5 class="alert-heading fw-bold text-dark-blue">
+                        <i class="fas fa-exclamation-circle me-2"></i>Yêu cầu đối với Video
+                    </h5>
+                    <ul class="list-unstyled mb-0 ms-3">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Video phải chứa cảnh giao lộ có đèn tín hiệu.</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Góc quay rộng, có thể nhìn thấy biển số xe.</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Chất lượng tốt (tối thiểu 480p).</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Thời lượng khuyến nghị: 30 giây - 5 phút.</li>
+                    </ul>
+                </div>
+
+                <div class="d-grid gap-2 mb-5">
+                    <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm">
+                        <i class="fas fa-upload me-2"></i>Tải lên
+                    </button>
+                </div>
+            </form>
+
+            <hr class="my-5">
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body p-4">
+                            <h4 class="card-title fw-bold text-dark-blue mb-3">
+                                <i class="fas fa-info-circle me-2 text-info"></i>Hướng dẫn sử dụng
+                            </h4>
+                            <ol class="list-group list-group-flush">
+                                <li class="list-group-item d-flex align-items-center border-0 px-0">
+                                    <span class="badge bg-primary rounded-pill me-3">1</span>
+                                    Nhấp "Choose File" và chọn video cần phân tích.
+                                </li>
+                                <li class="list-group-item d-flex align-items-center border-0 px-0">
+                                    <span class="badge bg-primary rounded-pill me-3">2</span>
+                                    Nhấp "Tải lên" để tải video lên máy chủ.
+                                </li>
+                                <li class="list-group-item d-flex align-items-center border-0 px-0">
+                                    <span class="badge bg-primary rounded-pill me-3">3</span>
+                                    Hệ thống sẽ tự động phân tích video và phát hiện vi phạm.
+                                </li>
+                                <li class="list-group-item d-flex align-items-center border-0 px-0">
+                                    <span class="badge bg-primary rounded-pill me-3">4</span>
+                                    Sau khi hoàn thành, bạn sẽ được chuyển đến trang kết quả.
+                                </li>
+                            </ol>
                         </div>
                     </div>
-
-                    <div class="alert alert-info">
-                        <h6><i class="fas fa-info-circle"></i> Yêu cầu video:</h6>
-                        <ul class="mb-0">
-                            <li>Video phải chứa cảnh giao lộ có đèn tín hiệu</li>
-                            <li>Góc quay rõ ràng, có thể nhìn thấy biển số xe</li>
-                            <li>Chất lượng video tối thiểu 480p</li>
-                            <li>Thời lượng khuyến nghị: 30 giây - 5 phút</li>
-                        </ul>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100 shadow-sm border-0 rounded-3">
+                        <div class="card-body p-4">
+                            <h4 class="card-title fw-bold text-dark-blue mb-3">
+                                <i class="fas fa-lightbulb me-2 text-warning"></i>Mẹo để có kết quả tốt nhất
+                            </h4>
+                            <ul class="list-unstyled">
+                                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Sử dụng video có ánh sáng tốt (ban ngày hoặc đèn đường đủ sáng).</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Camera đặt ở vị trí có thể nhìn rõ vạch dừng và đèn tín hiệu.</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Tránh video bị rung lắc hoặc mờ.</li>
+                                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Đảm bảo biển số xe trong video rõ nét, không bị che khuất.</li>
+                            </ul>
+                        </div>
                     </div>
-
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-cloud-upload-alt"></i> Upload
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
-
-        <div class="mt-4">
-            <h5><i class="fas fa-question-circle"></i> Hướng dẫn sử dụng:</h5>
-            <ol>
-                <li><strong>Chọn file video:</strong> Click nút "Choose File" và chọn video cần phân tích</li>
-                <li><strong>Upload:</strong> Click "Upload" để tải video lên server</li>
-                <li><strong>Xử lý:</strong> Hệ thống sẽ tự động phân tích video và phát hiện vi phạm</li>
-                <li><strong>Xem kết quả:</strong> Sau khi hoàn thành, bạn sẽ được chuyển đến trang kết quả</li>
-            </ol>
-        </div>
-
-        <div class="mt-3">
-            <h6><i class="fas fa-lightbulb"></i> Mẹo để có kết quả tốt nhất:</h6>
-            <ul>
-                <li>Sử dụng video có ánh sáng tốt (ban ngày hoặc đèn đường đủ sáng)</li>
-                <li>Camera đặt ở vị trí có thể nhìn rõ vạch dừng và đèn tín hiệu</li>
-                <li>Tránh video bị rung lắc hoặc mờ</li>
-                <li>Đảm bảo biển số xe trong video rõ nét, không bị che khuất</li>
-            </ul>
-        </div>
     </div>
-</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Example starter JavaScript for disabling form submissions if there are invalid fields
+    (function () {
+        'use strict'
+
+        // Fetch all the forms we want to apply custom Bootstrap validation styles to
+        var forms = document.querySelectorAll('.needs-validation')
+
+        // Loop over them and prevent submission
+        Array.prototype.slice.call(forms)
+            .forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+</script>
 {% endblock %}

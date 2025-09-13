@@ -576,7 +576,10 @@ class VideoProcessor:
                 self.draw_results(tracked_results, frame_original, scale, waiting_zone_pts, violation_zone_pts, out)
                 
                 with processing_lock:
-                    processing_status[job_id] = {'status': 'processing', 'progress': (frame_count / self.total_frames) * 100}
+                    processing_status[job_id] = {'status': 'processing', 
+                                                 'progress': (frame_count / self.total_frames) * 100, 
+                                                 'violations_found': len(self.violations_data)
+                                                 }
 
             cap.release()
             out.release()
@@ -585,6 +588,10 @@ class VideoProcessor:
             database.save_violations_to_db(job_id, self.violations_data)
             with processing_lock:
                 processing_status[job_id] = {'status': 'completed', 'output_video': os.path.basename(output_path)}
+                processing_results[job_id] = {
+                    'violations': self.violations_data,
+                    'output_video': output_path
+                }
             logger.info(f"Hoàn tất xử lý job {job_id}.")
         except Exception as e:
             logger.error(f"Lỗi nghiêm trọng: {e}", exc_info=True)
