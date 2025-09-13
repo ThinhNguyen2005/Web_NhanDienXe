@@ -11,7 +11,7 @@
             </div>
             <div class="card-body">
                 <div class="row mb-4">
-                    <div class="col-md-4">
+                    <!-- <div class="col-md-4">
                         <div class="card bg-light">
                             <div class="card-body text-center">
                                 <i class="fas fa-video fa-3x text-primary mb-2"></i>
@@ -19,13 +19,13 @@
                                 <span class="badge bg-primary fs-6">{{ status.total_frames or 0 }}</span>
                             </div>
                         </div>
-                    </div>
+                    </div> -->
                     <div class="col-md-4">
                         <div class="card bg-light">
                             <div class="card-body text-center">
                                 <i class="fas fa-exclamation-triangle fa-3x text-danger mb-2"></i>
                                 <h6>Vi phạm phát hiện</h6>
-                                <span class="badge bg-danger fs-6">{{ status.violations_found or 0 }}</span>
+                                <span class="badge bg-danger fs-6">{{ violations|length }}</span>
                             </div>
                         </div>
                     </div>
