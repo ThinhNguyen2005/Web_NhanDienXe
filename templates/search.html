@@ -19,6 +19,64 @@
             </div>
         </form>
 
+        {% if search_query %}
+        <div class="mt-4">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-3 fw-bold text-dark-blue">
+                        <i class="fas fa-list me-2 text-primary"></i>Kết quả tìm kiếm cho: "<span class="text-danger">{{ search_query }}</span>"
+                    </h5>
+                    {% if violations %}
+                    <p class="text-success fw-bold">Tìm thấy {{ violations|length }} vi phạm</p>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Biển số xe</th>
+                                    <th>Thời gian vi phạm</th>
+                                    <th>Frame</th>
+                                    <th>Độ tin cậy</th>
+                                    <th>Thời gian lưu</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for violation in violations %}
+                                <tr>
+                                    <td><strong class="text-danger">{{ violation.license_plate }}</strong></td>
+                                    <td>{{ violation.timestamp[:19].replace('T', ' ') }}</td>
+                                    <td>{{ violation.frame_number }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if violation.confidence > 0.8 %}success{% elif violation.confidence > 0.6 %}warning{% else %}danger{% endif %}">
+                                            {{ "%.1f%%"|format((violation.confidence or 0) * 100) }}
+                                        </span>
+                                    </td>
+                                    <td>{{ violation.created_at[:19].replace('T', ' ') if violation.created_at else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- <div class="alert alert-warning mt-4 rounded-3 shadow-sm" role="alert">
+                        <h6 class="alert-heading fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Thông tin quan trọng:</h6>
+                        <ul class="mb-0">
+                            <li>Tất cả thông tin vi phạm được ghi nhận tự động bởi hệ thống AI</li>
+                            <li>Độ tin cậy thể hiện mức độ chắc chắn khi nhận diện biển số</li>
+                            <li>Dữ liệu chỉ mang tính chất tham khảo</li>
+                        </ul>
+                    </div> -->
+                    {% else %}
+                    <div class="alert alert-info text-center rounded-3 shadow-sm" role="alert">
+                        <i class="fas fa-info-circle fa-2x mb-3 text-info"></i>
+                        <h5 class="fw-bold">Không tìm thấy kết quả</h5>
+                        <p class="mb-0">Không có vi phạm nào với biển số **"{{ search_query }}"**</p>
+                        <small class="text-muted">Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại biển số.</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <hr class="my-5">
 
         <div class="row g-4">
@@ -52,62 +110,6 @@
         </div>
     </div>
 
-    {% if search_query %}
-    <div class="mt-4">
-        <div class="card shadow-lg border-0 rounded-4">
-            <div class="card-body p-4">
-                <h5 class="mb-3 fw-bold text-dark-blue">
-                    <i class="fas fa-list me-2 text-primary"></i>Kết quả tìm kiếm cho: "<span class="text-danger">{{ search_query }}</span>"
-                </h5>
-                {% if violations %}
-                <p class="text-success fw-bold">Tìm thấy {{ violations|length }} vi phạm</p>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Biển số xe</th>
-                                <th>Thời gian vi phạm</th>
-                                <th>Frame</th>
-                                <th>Độ tin cậy</th>
-                                <th>Thời gian lưu</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for violation in violations %}
-                            <tr>
-                                <td><strong class="text-danger">{{ violation.license_plate }}</strong></td>
-                                <td>{{ violation.timestamp[:19].replace('T', ' ') }}</td>
-                                <td>{{ violation.frame_number }}</td>
-                                <td>
-                                    <span class="badge bg-{% if violation.confidence > 0.8 %}success{% elif violation.confidence > 0.6 %}warning{% else %}danger{% endif %}">
-                                        {{ "%.1f%%"|format((violation.confidence or 0) * 100) }}
-                                    </span>
-                                </td>
-                                <td>{{ violation.created_at[:19].replace('T', ' ') if violation.created_at else 'N/A' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="alert alert-warning mt-4 rounded-3 shadow-sm" role="alert">
-                    <h6 class="alert-heading fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Thông tin quan trọng:</h6>
-                    <ul class="mb-0">
-                        <li>Tất cả thông tin vi phạm được ghi nhận tự động bởi hệ thống AI</li>
-                        <li>Độ tin cậy thể hiện mức độ chắc chắn khi nhận diện biển số</li>
-                        <li>Dữ liệu chỉ mang tính chất tham khảo</li>
-                    </ul>
-                </div>
-                {% else %}
-                <div class="alert alert-info text-center rounded-3 shadow-sm" role="alert">
-                    <i class="fas fa-info-circle fa-2x mb-3 text-info"></i>
-                    <h5 class="fw-bold">Không tìm thấy kết quả</h5>
-                    <p class="mb-0">Không có vi phạm nào với biển số **"{{ search_query }}"**</p>
-                    <small class="text-muted">Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại biển số.</small>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
+    
 </section>
 {% endblock %}

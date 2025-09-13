@@ -377,49 +377,67 @@ class RoiAdjuster {
   }
 
   saveROI() {
+    // Lấy các phần tử HTML để hiển thị thông báo
+    const successAlert = document.getElementById('roi-save-success-alert');
+    const errorAlert = document.getElementById('roi-save-error-alert');
+    const errorMessageContainer = document.getElementById('roi-error-message');
+
+    // Ẩn các thông báo cũ trước khi gửi yêu cầu mới
+    successAlert.classList.add('d-none');
+    errorAlert.classList.add('d-none');
+
     // Kiểm tra số điểm tối thiểu
     if (this.waitingZone.length < 3 || this.violationZone.length < 3) {
-      alert("Vùng chờ và vùng vi phạm phải có ít nhất 3 điểm!");
-      return;
+        errorMessageContainer.textContent = 'Vùng chờ và vùng vi phạm phải có ít nhất 3 điểm!';
+        errorAlert.classList.remove('d-none');
+        return;
     }
 
     // Chuẩn bị dữ liệu
     const data = {
-      camera_id: document.getElementById("cameraId").value || "default",
-      waiting_zone: this.waitingZone,
-      violation_zone: this.violationZone,
+        camera_id: document.getElementById("cameraId").value || "default",
+        waiting_zone: this.waitingZone,
+        violation_zone: this.violationZone,
     };
 
     // Gửi API request để lưu ROI
     fetch("/api/save_roi", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
     })
-      .then((response) => response.json())
-      // Mã mới trong stop_line_adjuster.js
-      // ...
-      .then((data) => {
+    .then((response) => response.json())
+    .then((data) => {
         if (data.success) {
-          alert("Đã lưu ROI thành công!");
-          // --- THÊM DÒNG NÀY ---
-          // Kích hoạt nút xử lý video sau khi lưu ROI thành công
-          const btnProcessVideo = document.getElementById("btnProcessVideo");
-          if (btnProcessVideo) {
-            btnProcessVideo.disabled = false;
-            btnProcessVideo.removeAttribute("title");
-          }
+            // --- PHẦN NÂNG CẤP ---
+            // Hiện thông báo thành công
+            successAlert.classList.remove('d-none');
+
+            // Tự động ẩn thông báo sau 5 giây
+            setTimeout(() => {
+                successAlert.classList.add('d-none');
+            }, 5000);
+
+            // Kích hoạt nút xử lý video sau khi lưu ROI thành công
+            const btnProcessVideo = document.getElementById("btnProcessVideo");
+            if (btnProcessVideo) {
+                btnProcessVideo.disabled = false;
+                btnProcessVideo.removeAttribute("title");
+            }
         } else {
-          // ...
-          alert("Lỗi khi lưu ROI: " + data.error);
+            // Hiện thông báo lỗi với nội dung từ server
+            errorMessageContainer.textContent = 'Lỗi khi lưu ROI: ' + data.error;
+            errorAlert.classList.remove('d-none');
         }
-      })
-      .catch((error) => {
+    })
+    .catch((error) => {
         console.error("Lỗi:", error);
-        alert("Lỗi khi lưu ROI");
-      });
+        // Hiện thông báo lỗi chung
+        errorMessageContainer.textContent = 'Lỗi kết nối. Không thể lưu ROI.';
+        errorAlert.classList.remove('d-none');
+    });
   }
 
   reset() {

@@ -41,6 +41,22 @@
                         <h5 class="fw-bold mb-3 text-dark-blue">
                             <i class="fas fa-tools me-2"></i>Công cụ thiết lập
                         </h5>
+                        
+                        <div id="notification-container" class="my-3">
+                        <div id="roi-save-success-alert" class="alert alert-success d-none align-items-center" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <div>
+                                <strong>Thành công!</strong> Đã lưu cấu hình ROI.
+                            </div>
+                        </div>
+
+                        <div id="roi-save-error-alert" class="alert alert-danger d-none align-items-center" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <div id="roi-error-message">
+                                <strong>Lỗi!</strong> Không thể lưu cấu hình ROI.
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="cameraId" class="form-label">ID Camera:</label>
                             <input type="text" class="form-control" id="cameraId" placeholder="Nhập ID Camera (ví dụ: camera_1)">
