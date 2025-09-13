@@ -8,9 +8,10 @@ và trả về kết quả cho người dùng.
 import os
 import datetime
 import logging
+import cv2
 from threading import Thread, Lock
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, Response
 from werkzeug.utils import secure_filename
 
 # Import các module đã được tách
@@ -38,6 +39,9 @@ for folder in [config.UPLOAD_FOLDER, config.PROCESSED_FOLDER, config.VIOLATIONS_
 processing_status = {}
 processing_results = {}
 processing_lock = Lock()
+# Bổ sung biến realtime để tránh lỗi NameError khi stream
+realtime_processing = {}
+realtime_lock = Lock()
 
 # ---- KHỞI TẠO MODEL AI MỘT LẦN DUY NHẤT ----
 # Model sẽ được nạp vào bộ nhớ khi ứng dụng khởi động và tái sử dụng cho tất cả các request.
@@ -330,6 +334,49 @@ def delete_history(job_id):
         flash(f"Lỗi khi xóa lịch sử cho video {job_id}.", "danger")
     
     return redirect(url_for('history'))
+
+
+def generate_frames(video_name):
+    """ Xử lý và stream từng frame của video. """
+    # Ưu tiên lấy từ uploads, nếu không có thì thử processed
+    uploads_path = os.path.join(config.UPLOAD_FOLDER, video_name)
+    processed_path = os.path.join(config.PROCESSED_FOLDER, video_name)
+    video_path = uploads_path if os.path.exists(uploads_path) else processed_path
+    if not os.path.exists(video_path):
+        return
+    processor = VideoProcessor(video_path, detector)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return
+
+    camera_id = os.path.splitext(video_name)[0]
+    waiting_zone_pts, violation_zone_pts = load_rois(camera_id)
+    if not violation_zone_pts or not waiting_zone_pts:
+        waiting_zone_pts, violation_zone_pts = load_rois("default")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        processed_frame = processor.process_single_frame(frame, waiting_zone_pts, violation_zone_pts)
+        
+        ret, buffer = cv2.imencode('.jpg', processed_frame)
+        if not ret:
+            continue
+        
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    
+    cap.release()
+
+@app.route('/video_feed/<video_name>')
+def video_feed(video_name):
+    """ Route để trả về luồng video đã xử lý. """
+    return Response(generate_frames(video_name),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 if __name__ == '__main__':
     database.init_database()
     logger.info("🚀 Starting Traffic Violation Detection System...")

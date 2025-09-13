@@ -234,7 +234,75 @@ class VideoProcessor:
             cv2.rectangle(frame_viz, (label_pos[0], label_pos[1] - text_h - baseline), (label_pos[0] + text_w, label_pos[1]), color, -1)
             cv2.putText(frame_viz, full_label, (label_pos[0], label_pos[1] - baseline // 2), font, font_scale, text_color, font_thickness)
 
-        out_writer.write(frame_viz)
+        if out_writer is not None:
+            out_writer.write(frame_viz)
+        else:
+            return frame_viz
+
+    # === HÀM MỚI ĐỂ XỬ LÝ LIVE STREAM ===
+    def process_single_frame(self, frame_original, waiting_zone_pts, violation_zone_pts):
+        """
+        Xử lý một khung hình duy nhất và trả về khung hình đã được vẽ kết quả.
+        Hàm này được thiết kế để phục vụ cho việc streaming trực tiếp.
+        """
+        # Tăng frame count (quan trọng cho việc dọn dẹp track cũ)
+        self.frame_count = getattr(self, 'frame_count', 0) + 1
+
+        # Resize frame để xử lý
+        frame_processed, scale = self._resize_frame(frame_original, config.PROCESSING_FRAME_WIDTH)
+
+        # Theo dõi xe
+        tracked_results = self.detector.vehicle_detector.track_vehicles(frame_processed)
+
+        # Cập nhật các track
+        for track_data in tracked_results:
+            track_id = track_data['track_id']
+            if track_id in self.active_tracks:
+                self.active_tracks[track_id].update(track_data['bbox'], self.frame_count)
+            else:
+                self.active_tracks[track_id] = TrackedVehicle(track_id, track_data['bbox'], self.frame_count)
+
+        self._cleanup_stale_tracks(self.frame_count)
+
+        # Cập nhật trạng thái đèn
+        detected_light_color, light_bbox_scaled = self.detector.get_focused_traffic_light_info(frame_processed)
+        self._update_stable_light_color(detected_light_color)
+
+        light_bbox_original = None
+        if light_bbox_scaled is not None and scale > 0:
+            light_bbox_original = [int(v / scale) for v in light_bbox_scaled]
+
+        # Kiểm tra vi phạm
+        if self.active_tracks:
+            scaled_violation_zone = np.array([(int(p[0] * scale), int(p[1] * scale)) for p in violation_zone_pts], dtype=np.int32)
+            scaled_waiting_zone = np.array([(int(p[0] * scale), int(p[1] * scale)) for p in waiting_zone_pts], dtype=np.int32)
+
+            for vehicle in list(self.active_tracks.values()):
+                if vehicle.state in ['COMMITTED_VIOLATION', 'PASSED_LEGALLY']:
+                    continue
+
+                x, y, w, h = vehicle.bbox
+                vehicle_point = (int(x + w / 2), int(y + h))
+                is_in_waiting = cv2.pointPolygonTest(scaled_waiting_zone, vehicle_point, False) >= 0
+                is_in_violation = cv2.pointPolygonTest(scaled_violation_zone, vehicle_point, False) >= 0
+
+                if vehicle.state == 'NEUTRAL' and is_in_waiting:
+                    vehicle.state = 'IN_WAITING_ZONE'
+                elif vehicle.state == 'IN_WAITING_ZONE' and is_in_violation:
+                    if self.stable_light_color == 'red':
+                        vehicle.state = 'COMMITTED_VIOLATION'
+                        # Trong live stream, chúng ta chỉ cập nhật trạng thái và nhận dạng biển số để hiển thị
+                        bbox_original = [int(v / scale) for v in vehicle.bbox]
+                        _, plate_text, _ = self.detector.extract_and_recognize_plate(frame_original, bbox_original)
+                        vehicle.license_plate = plate_text
+                    else:
+                        vehicle.state = 'PASSED_LEGALLY'
+                elif vehicle.state == 'NEUTRAL' and is_in_violation:
+                    vehicle.state = 'PASSED_LEGALLY'
+
+        # Vẽ kết quả lên frame và trả về
+        # Lưu ý: Hàm draw_results của bạn phải được sửa để trả về frame_viz thay vì chỉ ghi file
+        return self.draw_results(frame_original, scale, waiting_zone_pts, violation_zone_pts, out_writer=None, light_bbox=light_bbox_original)
 
     def _handle_violation_db(self, track_id, job_id, frame_count, plate_text, plate_conf, bbox):
         violation_item = {
