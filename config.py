@@ -58,7 +58,13 @@ ENABLE_GPU_OPTIMIZATION = True
 # Sử dụng FP16 (Half-precision) để giảm VRAM và tăng tốc.
 USE_HALF_PRECISION = True
 # Một xe sẽ không bị ghi nhận vi phạm lặp lại trong khoảng thời gian này.
-VIOLATION_COOLDOWN_SECONDS = 30
+# VIOLATION_COOLDOWN_SECONDS = 30
 # Hệ thống sẽ kiểm tra ROI và đèn tín hiệu mỗi K khung hình.
 # Giá trị 3-5 là một sự cân bằng tốt.
 CHECK_VIOLATION_INTERVAL = 3
+
+# Số frame tối đa mà một track được phép không xuất hiện trước khi bị xoá
+TRACK_TIMEOUT_FRAMES = 30 
+
+# Số frame liên tiếp cần để xác nhận trạng thái đèn (chống nhiễu)
+LIGHT_STATE_BUFFER_SIZE = 5

@@ -1,253 +1,511 @@
 {% extends "base.html" %}
 
+{% block title %}Thiết Lập ROI{% endblock %}
+
 {% block content %}
-<section class="container my-5">
-    <div class="card shadow-lg border-0 rounded-4 p-4">
-        <h2 class="card-title text-center mb-5 fw-bold text-dark-blue">
-            <i class="fas fa-draw-polygon me-3 text-info"></i>Thiết Lập Vùng ROI
-        </h2>
-        <div class="row g-4">
-            <div class="col-md-7">
-                <div class="card h-100 shadow-sm border-0 rounded-3">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3 text-dark-blue">
-                            <i class="fas fa-video me-2"></i>Vùng quan sát
-                        </h5>
-                        <div class="ratio ratio-16x9 border rounded-3 bg-light d-flex align-items-center justify-content-center roi-video-frame">
-                            <video id="videoSource" src="" class="d-none" controls></video>
-                            <canvas id="videoCanvas" class="w-100" style="background-color: #eee; min-height: 400px;"></canvas>
+<section class="container-fluid my-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-11">
+            <!-- Header Section -->
+            <div class="card shadow-lg border-0 rounded-4 mb-4">
+                <div class="card-body text-center py-4">
+                    <h1 class="display-6 fw-bold text-primary mb-2">
+                        <i class="fas fa-draw-polygon me-3"></i>Thiết Lập Vùng ROI
+                    </h1>
+                    <p class="lead text-muted mb-0">Cấu hình vùng quan sát và xử lý vi phạm giao thông</p>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="row g-4">
+                <!-- Video & Canvas Section -->
+                <div class="col-lg-8">
+                    <div class="card shadow-sm border-0 rounded-3 h-100">
+                        <div class="card-header bg-primary text-white rounded-top-3">
+                            <h5 class="mb-0 fw-bold">
+                                <i class="fas fa-video me-2"></i>Vùng Quan Sát
+                            </h5>
                         </div>
-                        <div class="d-flex align-items-center flex-column flex-md-row justify-content-between gap-2 roi-controls-container">
-                            <div class="w-100 mb-2 mb-md-0">
-                                <select id="videoSelect" class="form-select">
-                                    <option value="">-- Chọn video --</option>
+                        <div class="card-body p-4">
+                            <!-- Video Selection -->
+                            <div class="mb-3">
+                                <label for="videoSelect" class="form-label fw-semibold">
+                                    <i class="fas fa-folder-open me-2 text-info"></i>Chọn Video
+                                </label>
+                                <select id="videoSelect" class="form-select form-select-lg">
+                                    <option value="">-- Chọn video để thiết lập ROI --</option>
                                     {% for video in videos %}
                                     <option value="{{ video.path }}">{{ video.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="d-flex gap-2">
-                                <button id="btnPlayPause" class="btn btn-outline-primary"><i class="fas fa-play"></i></button>
-                                <button id="btnCapture" class="btn btn-outline-secondary"><i class="fas fa-camera"></i></button>
+
+                            <!-- Video Display Area -->
+                            <div class="position-relative">
+                                <div class="ratio ratio-16x9 border rounded-3 bg-light d-flex align-items-center justify-content-center" 
+                                     style="min-height: 400px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                                    
+                                    <!-- Default State -->
+                                    <div id="defaultVideoState" class="text-center text-muted">
+                                        <i class="fas fa-play-circle fa-5x mb-3 opacity-50"></i>
+                                        <h4>Chọn video để bắt đầu</h4>
+                                        <p>Vui lòng chọn video từ danh sách trên</p>
+                                    </div>
+
+                                    <!-- Video Element -->
+                                    <video id="videoSource" class="d-none w-100 rounded-3" controls></video>
+                                    
+                                    <!-- Canvas for ROI Drawing -->
+                                    <canvas id="videoCanvas" class="d-none position-absolute top-0 start-0 w-100 h-100 rounded-3" 
+                                            style="cursor: crosshair; z-index: 10;"></canvas>
+                                    
+                                    <!-- Live Stream Display -->
+                                    <img id="liveStream" class="d-none w-100 h-100 object-fit-cover rounded-3" 
+                                         alt="Live Stream" style="object-fit: contain;">
+                                </div>
+
+                                <!-- Video Controls -->
+                                <div class="d-flex justify-content-center gap-2 mt-3" id="videoControls" style="display: none !important;">
+                                    <button id="btnPlayPause" class="btn btn-outline-primary btn-lg">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button id="btnCapture" class="btn btn-outline-secondary btn-lg">
+                                        <i class="fas fa-camera"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="col-lg-4">
+                    <div class="card shadow-sm border-0 rounded-3 h-100">
+                        <div class="card-header bg-success text-white rounded-top-3">
+                            <h5 class="mb-0 fw-bold">
+                                <i class="fas fa-tools me-2"></i>Bảng Điều Khiển
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <!-- Camera ID Input -->
+                            <div class="mb-4">
+                                <label for="cameraId" class="form-label fw-semibold">
+                                    <i class="fas fa-tag me-2 text-primary"></i>ID Camera
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="cameraId" 
+                                       placeholder="Nhập ID Camera (ví dụ: camera_1)">
+                                <div class="form-text">ID này sẽ được sử dụng để lưu cấu hình ROI</div>
+                            </div>
+
+                            <!-- ROI Drawing Tools -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold mb-3">
+                                    <i class="fas fa-draw-polygon me-2 text-warning"></i>Công Cụ Vẽ ROI
+                                </label>
+                                <div class="d-grid gap-2">
+                                    <button id="btnDrawWaitingZone" class="btn btn-warning btn-lg rounded-pill fw-bold">
+                                        <i class="fas fa-traffic-light me-2"></i>Vùng Chờ Đèn
+                                    </button>
+                                    <button id="btnDrawViolationZone" class="btn btn-danger btn-lg rounded-pill fw-bold">
+                                        <i class="fas fa-car-crash me-2"></i>Vùng Vi Phạm
+                                    </button>
+                                    <button id="btnReset" class="btn btn-secondary btn-lg rounded-pill fw-bold">
+                                        <i class="fas fa-undo me-2"></i>Làm Lại
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Save ROI -->
+                            <div class="mb-4">
+                                <button id="btnSaveROI" type="button" class="btn btn-success btn-lg w-100 fw-bold rounded-pill">
+                                    <i class="fas fa-save me-2"></i>Lưu Thiết Lập ROI
+                                </button>
+                            </div>
+
+                            <!-- Processing Options -->
+                            <div class="card border-info">
+                                <div class="card-header bg-info bg-opacity-10 border-info">
+                                    <h6 class="mb-0 fw-bold text-info">
+                                        <i class="fas fa-cogs me-2"></i>Tùy Chọn Xử Lý
+                                    </h6>
+                                </div>
+                                <div class="card-body p-3">
+                                    <p class="text-muted small mb-3">Chọn phương thức xử lý video sau khi lưu ROI:</p>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button id="backgroundProcessBtn" class="btn btn-primary btn-lg fw-bold rounded-pill" disabled>
+                                            <i class="fas fa-rocket me-2"></i>Xử Lý Nhanh
+                                            <small class="d-block fw-normal">Xử lý nền, xem kết quả sau</small>
+                                        </button>
+                                        
+                                        <button id="liveProcessBtn" class="btn btn-info btn-lg fw-bold rounded-pill" disabled>
+                                            <i class="fas fa-eye me-2"></i>Xử Lý Trực Tiếp
+                                            <small class="d-block fw-normal">Xem kết quả ngay lập tức</small>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="col-md-5">
-                <div class="card h-100 shadow-sm border-0 rounded-3">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3 text-dark-blue">
-                            <i class="fas fa-tools me-2"></i>Công cụ thiết lập
-                        </h5>
-                        
-                        <div id="notification-container" class="my-3">
-                        <div id="roi-save-success-alert" class="alert alert-success d-none align-items-center" role="alert">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <div>
-                                <strong>Thành công!</strong> Đã lưu cấu hình ROI.
-                            </div>
-                        </div>
 
-                        <div id="roi-save-error-alert" class="alert alert-danger d-none align-items-center" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <div id="roi-error-message">
-                                <strong>Lỗi!</strong> Không thể lưu cấu hình ROI.
+            <!-- Instructions Section -->
+            <div class="row g-4 mt-2">
+                <div class="col-md-6">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-light">
+                            <h5 class="card-title fw-bold text-primary mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Hướng Dẫn Sử Dụng
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="d-flex align-items-start">
+                                        <span class="badge bg-primary rounded-pill me-3 mt-1">1</span>
+                                        <div>
+                                            <strong>Chọn Video</strong>
+                                            <p class="text-muted mb-0 small">Chọn video từ danh sách để hiển thị hình ảnh giao lộ</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex align-items-start">
+                                        <span class="badge bg-primary rounded-pill me-3 mt-1">2</span>
+                                        <div>
+                                            <strong>Nhập ID Camera</strong>
+                                            <p class="text-muted mb-0 small">Đặt tên định danh cho camera để lưu cấu hình</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex align-items-start">
+                                        <span class="badge bg-primary rounded-pill me-3 mt-1">3</span>
+                                        <div>
+                                            <strong>Vẽ Vùng ROI</strong>
+                                            <p class="text-muted mb-0 small">Nhấp chuột vào các điểm trên video để tạo vùng quan sát</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex align-items-start">
+                                        <span class="badge bg-primary rounded-pill me-3 mt-1">4</span>
+                                        <div>
+                                            <strong>Lưu & Xử Lý</strong>
+                                            <p class="text-muted mb-0 small">Lưu thiết lập và chọn phương thức xử lý phù hợp</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="cameraId" class="form-label">ID Camera:</label>
-                            <input type="text" class="form-control" id="cameraId" placeholder="Nhập ID Camera (ví dụ: camera_1)">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Vùng ROI:</label>
-                            <p class="form-text">Nhấp chuột vào video để đặt các điểm tạo thành vùng ROI.</p>
-                            <div class="d-grid gap-2">
-                                <button id="btnDrawWaitingZone" class="btn btn-warning rounded-pill fw-bold"><i class="fas fa-traffic-light me-2"></i>Vùng chờ đèn</button>
-                                <button id="btnDrawViolationZone" class="btn btn-danger rounded-pill fw-bold"><i class="fas fa-car-crash me-2"></i>Vùng vi phạm</button>
-                                <button id="btnReset" class="btn btn-secondary rounded-pill fw-bold"><i class="fas fa-undo me-2"></i>Làm lại</button>
-                            </div>
-                        </div>
-                        <div class="d-grid gap-2">
-                            <button id="btnSaveROI" type="button" class="btn btn-success btn-lg fw-bold"><i class="fas fa-save me-2"></i>Lưu Thiết Lập</button>
-                            <button id="btnProcessVideo" type="button" class="btn btn-primary btn-lg fw-bold" disabled><i class="fas fa-running me-2"></i>Đi tới xử lý video</button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <hr class="my-5">
-
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="card h-100 shadow-sm border-0 rounded-3">
-                    <div class="card-body p-4">
-                        <h5 class="card-title fw-bold text-dark-blue mb-3">
-                            <i class="fas fa-info-circle me-2 text-info"></i>Hướng dẫn sử dụng
-                        </h5>
-                        <ol class="list-group list-group-flush">
-                            <li class="list-group-item d-flex align-items-start border-0 px-0">
-                                <span class="badge bg-primary rounded-pill me-3">1</span>
-                                Tải video lên hoặc chọn từ danh sách để hiển thị hình ảnh giao lộ.
-                            </li>
-                            <li class="list-group-item d-flex align-items-start border-0 px-0">
-                                <span class="badge bg-primary rounded-pill me-3">2</span>
-                                Chọn "Vùng chờ đèn" hoặc "Vùng vi phạm" để bắt đầu thiết lập.
-                            </li>
-                            <li class="list-group-item d-flex align-items-start border-0 px-0">
-                                <span class="badge bg-primary rounded-pill me-3">3</span>
-                                Nhấp chuột vào các điểm trên video để vẽ vùng ROI.
-                            </li>
-                            <li class="list-group-item d-flex align-items-start border-0 px-0">
-                                <span class="badge bg-primary rounded-pill me-3">4</span>
-                                Nhấn "Lưu Thiết Lập" khi hoàn tất.
-                            </li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card h-100 shadow-sm border-0 rounded-3">
-                    <div class="card-body p-4">
-                        <h5 class="card-title fw-bold text-dark-blue mb-3">
-                            <i class="fas fa-question-circle me-2 text-warning"></i>Giải thích
-                        </h5>
-                        <ul class="list-unstyled mb-0">
-                            <li class="mb-2"><i class="fas fa-circle me-2 text-warning" style="font-size: 0.75rem;"></i><strong class="text-warning">Vùng chờ đèn:</strong> Khu vực xe được phép dừng chờ đèn tín hiệu.</li>
-                            <li class="mb-2"><i class="fas fa-circle me-2 text-danger" style="font-size: 0.75rem;"></i><strong class="text-danger">Vùng vi phạm:</strong> Khu vực ngay sau vạch dừng, nơi xe vượt qua sẽ bị tính là vi phạm.</li>
-                        </ul>
+                
+                <div class="col-md-6">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-light">
+                            <h5 class="card-title fw-bold text-warning mb-0">
+                                <i class="fas fa-lightbulb me-2"></i>Giải Thích Vùng ROI
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="alert alert-warning border-0 rounded-3">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-traffic-light fa-2x text-warning me-3"></i>
+                                            <div>
+                                                <strong>Vùng Chờ Đèn</strong>
+                                                <p class="mb-0 small">Khu vực xe được phép dừng chờ đèn tín hiệu. Thường là khu vực trước vạch dừng.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="alert alert-danger border-0 rounded-3">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-car-crash fa-2x text-danger me-3"></i>
+                                            <div>
+                                                <strong>Vùng Vi Phạm</strong>
+                                                <p class="mb-0 small">Khu vực ngay sau vạch dừng. Xe vượt qua khi đèn đỏ sẽ bị tính là vi phạm.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
+<!-- Status Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="statusToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="fas fa-info-circle text-primary me-2"></i>
+            <strong class="me-auto">Thông báo</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage">
+            Thông báo sẽ hiển thị tại đây
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/stop_line_adjuster.js') }}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const videoSelect = document.getElementById('videoSelect');
-        const videoSource = document.getElementById('videoSource');
-        const btnPlayPause = document.getElementById('btnPlayPause');
-        const btnReset = document.getElementById('btnReset');
-        const cameraIdInput = document.getElementById('cameraId');
-        const btnProcessVideo = document.getElementById('btnProcessVideo');
-        const btnCapture = document.getElementById('btnCapture');
-        const btnDrawWaitingZone = document.getElementById('btnDrawWaitingZone');
-        const btnDrawViolationZone = document.getElementById('btnDrawViolationZone');
-        const btnSaveROI = document.getElementById('btnSaveROI');
-
-        window.roiAdjuster = new RoiAdjuster('videoCanvas', 'videoSource');
-
-        function loadSelectedVideo() {
-            const videoPath = videoSelect.value;
-            if (videoPath) {
-                videoSource.src = "/api/get_video/" + videoPath;
-                videoSource.load();
-                videoSource.onloadeddata = function() {
-                    if (window.roiAdjuster) {
-                        window.roiAdjuster.updateCanvas();
-                    }
-                };
-            }
-        }
-
-        videoSelect.addEventListener('change', loadSelectedVideo);
-
-        cameraIdInput.addEventListener('change', function() {
-            if (this.value && window.roiAdjuster) {
-                window.roiAdjuster.loadROI(this.value);
-            }
-        });
-
-        btnPlayPause.addEventListener('click', function() {
-            if (videoSource.paused || videoSource.ended) {
-                videoSource.play();
-                this.innerHTML = '<i class="fas fa-pause"></i>';
-                function updateCanvasLoop() {
-                    if (!videoSource.paused && window.roiAdjuster) {
-                        window.roiAdjuster.updateCanvas();
-                        requestAnimationFrame(updateCanvasLoop);
-                    }
-                }
-                updateCanvasLoop();
-            } else {
-                videoSource.pause();
-                this.innerHTML = '<i class="fas fa-play"></i>';
-            }
-        });
-
-        btnReset.addEventListener('click', () => {
-            if (window.roiAdjuster) window.roiAdjuster.reset();
-        });
-
-        btnCapture.addEventListener('click', () => {
-            if (videoSource.src && window.roiAdjuster) {
-                videoSource.pause();
-                btnPlayPause.innerHTML = '<i class="fas fa-play"></i>';
-                window.roiAdjuster.updateCanvas();
-            }
-        });
-
-        btnDrawWaitingZone.addEventListener('click', () => {
-            if (window.roiAdjuster) {
-                window.roiAdjuster.startDrawing('waiting_zone');
-            }
-        });
-
-        btnDrawViolationZone.addEventListener('click', () => {
-            if (window.roiAdjuster) {
-                window.roiAdjuster.startDrawing('violation_zone');
-            }
-        });
-
-        btnSaveROI.addEventListener('click', function() {
-            if (window.roiAdjuster) {
-                const cameraId = cameraIdInput.value;
-                if (!cameraId) {
-                    alert('Vui lòng nhập ID Camera trước khi lưu.');
-                    return;
-                }
-                window.roiAdjuster.saveROI(cameraId);
-                btnProcessVideo.disabled = false;
-            }
-        });
-
-        btnProcessVideo.addEventListener('click', function() {
-            const selectedVideoPath = videoSelect.value;
-            if (!selectedVideoPath) {
-                alert('Lỗi: Không tìm thấy video được chọn.');
-                return;
-            }
-            const normalizedPath = selectedVideoPath.replace(/\\/g, "/");
-            const filename = normalizedPath.split('/').pop();
-            window.location.href = `/process/${filename}`;
-        });
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const videoForSetup = urlParams.get('video_for_setup');
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM Elements
+    const elements = {
+        videoSelect: document.getElementById('videoSelect'),
+        videoSource: document.getElementById('videoSource'),
+        videoCanvas: document.getElementById('videoCanvas'),
+        defaultVideoState: document.getElementById('defaultVideoState'),
+        videoControls: document.getElementById('videoControls'),
+        liveStream: document.getElementById('liveStream'),
         
-        if (videoForSetup) {
-            for (let i = 0; i < videoSelect.options.length; i++) {
-                if (videoSelect.options[i].value === videoForSetup) {
-                    videoSelect.selectedIndex = i;
-                    break;
-                }
-            }
-            
-            loadSelectedVideo();
+        btnPlayPause: document.getElementById('btnPlayPause'),
+        btnCapture: document.getElementById('btnCapture'),
+        btnReset: document.getElementById('btnReset'),
+        
+        cameraIdInput: document.getElementById('cameraId'),
+        btnDrawWaitingZone: document.getElementById('btnDrawWaitingZone'),
+        btnDrawViolationZone: document.getElementById('btnDrawViolationZone'),
+        btnSaveROI: document.getElementById('btnSaveROI'),
+        
+        backgroundProcessBtn: document.getElementById('backgroundProcessBtn'),
+        liveProcessBtn: document.getElementById('liveProcessBtn'),
+        
+        statusToast: document.getElementById('statusToast'),
+        toastMessage: document.getElementById('toastMessage')
+    };
 
-            const normalizedPath = videoForSetup.replace(/\\/g, "/");
+    // Initialize ROI Adjuster
+    window.roiAdjuster = new RoiAdjuster('videoCanvas', 'videoSource');
+
+    // Toast helper function
+    function showToast(message, type = 'info') {
+        const iconMap = {
+            'success': 'fas fa-check-circle text-success',
+            'error': 'fas fa-exclamation-triangle text-danger',
+            'warning': 'fas fa-exclamation-circle text-warning',
+            'info': 'fas fa-info-circle text-primary'
+        };
+        
+        const toastHeader = elements.statusToast.querySelector('.toast-header i');
+        toastHeader.className = iconMap[type] + ' me-2';
+        elements.toastMessage.textContent = message;
+        
+        const toast = new bootstrap.Toast(elements.statusToast);
+        toast.show();
+    }
+
+    // Video selection handler
+    function loadSelectedVideo() {
+        const videoPath = elements.videoSelect.value;
+        if (videoPath) {
+            // Hide default state, show video
+            elements.defaultVideoState.style.display = 'none';
+            elements.videoSource.classList.remove('d-none');
+            elements.videoCanvas.classList.remove('d-none');
+            elements.videoControls.style.display = 'flex';
+            
+            elements.videoSource.src = "/api/get_video/" + videoPath;
+            elements.videoSource.load();
+            
+            elements.videoSource.onloadeddata = function() {
+                if (window.roiAdjuster) {
+                    window.roiAdjuster.updateCanvas();
+                }
+                showToast('Video đã được tải thành công!', 'success');
+            };
+
+            // Auto-fill camera ID from filename
+            const normalizedPath = videoPath.replace(/\\/g, "/");
             const filename = normalizedPath.split('/').pop();
             const cameraIdFromFile = filename.substring(0, filename.lastIndexOf('.'));
-            cameraIdInput.value = cameraIdFromFile;
-            cameraIdInput.dispatchEvent(new Event('change'));
+            elements.cameraIdInput.value = cameraIdFromFile;
+            
+            // Load existing ROI if available
+            if (window.roiAdjuster) {
+                window.roiAdjuster.loadROI(cameraIdFromFile);
+            }
+        } else {
+            // Show default state, hide video
+            elements.defaultVideoState.style.display = 'block';
+            elements.videoSource.classList.add('d-none');
+            elements.videoCanvas.classList.add('d-none');
+            elements.videoControls.style.display = 'none';
+            elements.liveStream.classList.add('d-none');
+        }
+    }
+
+    // Event Listeners
+    elements.videoSelect.addEventListener('change', loadSelectedVideo);
+
+    elements.cameraIdInput.addEventListener('change', function() {
+        if (this.value && window.roiAdjuster) {
+            window.roiAdjuster.loadROI(this.value);
         }
     });
+
+    elements.btnPlayPause.addEventListener('click', function() {
+        if (elements.videoSource.paused || elements.videoSource.ended) {
+            elements.videoSource.play();
+            this.innerHTML = '<i class="fas fa-pause"></i>';
+            
+            function updateCanvasLoop() {
+                if (!elements.videoSource.paused && window.roiAdjuster) {
+                    window.roiAdjuster.updateCanvas();
+                    requestAnimationFrame(updateCanvasLoop);
+                }
+            }
+            updateCanvasLoop();
+        } else {
+            elements.videoSource.pause();
+            this.innerHTML = '<i class="fas fa-play"></i>';
+        }
+    });
+
+    elements.btnCapture.addEventListener('click', () => {
+        if (elements.videoSource.src && window.roiAdjuster) {
+            elements.videoSource.pause();
+            elements.btnPlayPause.innerHTML = '<i class="fas fa-play"></i>';
+            window.roiAdjuster.updateCanvas();
+            showToast('Đã chụp khung hình hiện tại!', 'success');
+        }
+    });
+
+    elements.btnReset.addEventListener('click', () => {
+        if (window.roiAdjuster) {
+            window.roiAdjuster.reset();
+            showToast('Đã xóa tất cả vùng ROI!', 'warning');
+        }
+    });
+
+    elements.btnDrawWaitingZone.addEventListener('click', () => {
+        if (window.roiAdjuster) {
+            window.roiAdjuster.startDrawing('waiting_zone');
+            showToast('Nhấp chuột để vẽ vùng chờ đèn', 'info');
+        }
+    });
+
+    elements.btnDrawViolationZone.addEventListener('click', () => {
+        if (window.roiAdjuster) {
+            window.roiAdjuster.startDrawing('violation_zone');
+            showToast('Nhấp chuột để vẽ vùng vi phạm', 'info');
+        }
+    });
+
+    elements.btnSaveROI.addEventListener('click', function() {
+        const cameraId = elements.cameraIdInput.value;
+        if (!cameraId) {
+            showToast('Vui lòng nhập ID Camera trước khi lưu!', 'error');
+            elements.cameraIdInput.focus();
+            return;
+        }
+        
+        if (window.roiAdjuster) {
+            window.roiAdjuster.saveROI(cameraId);
+            
+            // Enable processing buttons
+            elements.backgroundProcessBtn.disabled = false;
+            elements.liveProcessBtn.disabled = false;
+            
+            showToast('Đã lưu cấu hình ROI thành công!', 'success');
+        }
+    });
+
+    // Processing handlers
+    elements.backgroundProcessBtn.addEventListener('click', () => {
+        const videoPath = elements.videoSelect.value;
+        if (!videoPath) {
+            showToast('Vui lòng chọn video trước!', 'error');
+            return;
+        }
+        
+        const normalizedPath = videoPath.replace(/\\/g, "/");
+        const videoName = normalizedPath.split('/').pop();
+        
+        showToast('Đang chuyển đến trang xử lý...', 'info');
+        setTimeout(() => {
+            window.location.href = `/process/${videoName}`;
+        }, 1000);
+    });
+
+    elements.liveProcessBtn.addEventListener('click', () => {
+        const videoPath = elements.videoSelect.value;
+        if (!videoPath) {
+            showToast('Vui lòng chọn video trước!', 'error');
+            return;
+        }
+        
+        // Hide video elements and show live stream (pause and mute to avoid audio)
+        try {
+            elements.videoSource.pause();
+        } catch (e) {}
+        elements.videoSource.removeAttribute('src');
+        elements.videoSource.load();
+
+        elements.videoSource.classList.add('d-none');
+        elements.videoCanvas.classList.add('d-none');
+        elements.videoControls.style.display = 'none';
+        elements.defaultVideoState.style.display = 'none';
+        
+        elements.liveStream.classList.remove('d-none');
+        
+        const normalizedPath = videoPath.replace(/\\/g, "/");
+        const videoName = normalizedPath.split('/').pop();
+        
+        elements.liveStream.src = `/video_feed/${videoName}`;
+        showToast('Đang khởi động xử lý trực tiếp...', 'success');
+        
+        // Add stop button functionality
+        elements.liveProcessBtn.innerHTML = '<i class="fas fa-stop me-2"></i>Dừng Xử Lý';
+        elements.liveProcessBtn.classList.remove('btn-info');
+        elements.liveProcessBtn.classList.add('btn-warning');
+        
+        elements.liveProcessBtn.onclick = function() {
+            // Stop live processing
+            elements.liveStream.src = '';
+            elements.liveStream.classList.add('d-none');
+            
+            // Show video elements again
+            elements.videoSource.classList.remove('d-none');
+            elements.videoCanvas.classList.remove('d-none');
+            elements.videoControls.style.display = 'flex';
+            
+            // Reset button
+            this.innerHTML = '<i class="fas fa-eye me-2"></i>Xử Lý Trực Tiếp<small class="d-block fw-normal">Xem kết quả ngay lập tức</small>';
+            this.classList.remove('btn-warning');
+            this.classList.add('btn-info');
+            this.onclick = elements.liveProcessBtn.onclick;
+            
+            showToast('Đã dừng xử lý trực tiếp', 'warning');
+        };
+    });
+
+    // Auto-load video if specified in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoForSetup = urlParams.get('video_for_setup');
+    
+    if (videoForSetup) {
+        // Find and select the video
+        for (let i = 0; i < elements.videoSelect.options.length; i++) {
+            if (elements.videoSelect.options[i].value === videoForSetup) {
+                elements.videoSelect.selectedIndex = i;
+                loadSelectedVideo();
+                showToast('Video đã được tự động chọn từ trang upload', 'info');
+                break;
+            }
+        }
+    }
+});
 </script>
 {% endblock %}

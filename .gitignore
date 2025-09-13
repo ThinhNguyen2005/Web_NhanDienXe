@@ -8,3 +8,4 @@ violations/
 *.db
 uploads/
 rois/
+config/

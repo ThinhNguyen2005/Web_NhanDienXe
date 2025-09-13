@@ -8,9 +8,10 @@ và trả về kết quả cho người dùng.
 import os
 import datetime
 import logging
+import cv2
 from threading import Thread, Lock
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, Response
 from werkzeug.utils import secure_filename
 
 # Import các module đã được tách
@@ -19,7 +20,6 @@ import database
 from detector_manager import TrafficViolationDetector
 from video_processor import VideoProcessor
 from roi_manager_enhanced import save_rois, load_rois
-# import numpy as np
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,9 +30,6 @@ app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 
-# Đăng ký blueprint cho ROI routes
-# from routes.roi_routes import roi_routes
-# app.register_blueprint(roi_routes)
 
 # Tạo các thư mục cần thiết
 for folder in [config.UPLOAD_FOLDER, config.PROCESSED_FOLDER, config.VIOLATIONS_FOLDER]:
@@ -42,6 +39,9 @@ for folder in [config.UPLOAD_FOLDER, config.PROCESSED_FOLDER, config.VIOLATIONS_
 processing_status = {}
 processing_results = {}
 processing_lock = Lock()
+# Bổ sung biến realtime để tránh lỗi NameError khi stream
+realtime_processing = {}
+realtime_lock = Lock()
 
 # ---- KHỞI TẠO MODEL AI MỘT LẦN DUY NHẤT ----
 # Model sẽ được nạp vào bộ nhớ khi ứng dụng khởi động và tái sử dụng cho tất cả các request.
@@ -182,28 +182,6 @@ def upload_video():
             return redirect(request.url)
     return render_template('upload.html')
 
-# @app.route('/process/<filename>')
-# def process_video_route(filename):
-#     """
-#     Bắt đầu một tiến trình xử lý video mới trong một luồng riêng.
-#     """
-#     filepath = os.path.join(config.UPLOAD_FOLDER, filename)
-#     if not os.path.exists(filepath):
-#         flash('File không tồn tại.')
-#         return redirect(url_for('upload_video'))
-
-#     job_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.path.splitext(filename)[0]}"
-
-#     with processing_lock:
-#         processing_status[job_id] = {'status': 'starting', 'progress': 0}
-
-#     # Truyền đối tượng `detector` đã được khởi tạo toàn cục vào VideoProcessor.
-#     processor = VideoProcessor(filepath, detector)
-#     thread = Thread(target=processor.process_video, args=(job_id, processing_status, processing_results, processing_lock))
-#     thread.daemon = True
-#     thread.start()
-
-#     return render_template('processing.html', job_id=job_id, filename=filename)
 @app.route('/process/<filename>')
 def process_video_route(filename):
     """
@@ -323,110 +301,84 @@ def history():
     return render_template('history.html', videos=videos)
 
 
+@app.route('/violation_history/<job_id>')
+def violation_history(job_id):
+    """Trang hiển thị chi tiết vi phạm của một video cụ thể."""
+    violations = database.get_violations_by_job_id(job_id)
+    return render_template('results.html', 
+                         job_id=job_id,
+                         status={'status': 'completed', 'progress': 100},
+                         violations=violations)
+
 @app.route('/delete_history/<job_id>', methods=['POST'])
 def delete_history(job_id):
-    """Xóa toàn bộ lịch sử vi phạm của một video."""
-    success = database.delete_violations_by_job_id(job_id)
-    if success:
-        flash(f"Đã xóa lịch sử vi phạm cho video {job_id}.", "success")
-    else:
+    """Xóa toàn bộ lịch sử vi phạm và video đã xử lý của một job."""
+    try:
+        # Xóa vi phạm
+        violations_deleted = database.delete_violations_by_job_id(job_id)
+        
+        # Xóa video đã xử lý
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM processed_videos WHERE job_id = ?', (job_id,))
+        videos_deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if violations_deleted or videos_deleted:
+            flash(f"Đã xóa lịch sử cho video {job_id}.", "success")
+        else:
+            flash(f"Không tìm thấy dữ liệu để xóa cho video {job_id}.", "warning")
+    except Exception as e:
+        logger.error(f"Lỗi khi xóa lịch sử cho video {job_id}: {e}")
         flash(f"Lỗi khi xóa lịch sử cho video {job_id}.", "danger")
+    
     return redirect(url_for('history'))
+
+
+def generate_frames(video_name):
+    """ Xử lý và stream từng frame của video. """
+    # Ưu tiên lấy từ uploads, nếu không có thì thử processed
+    uploads_path = os.path.join(config.UPLOAD_FOLDER, video_name)
+    processed_path = os.path.join(config.PROCESSED_FOLDER, video_name)
+    video_path = uploads_path if os.path.exists(uploads_path) else processed_path
+    if not os.path.exists(video_path):
+        return
+    processor = VideoProcessor(video_path, detector)
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return
+
+    camera_id = os.path.splitext(video_name)[0]
+    waiting_zone_pts, violation_zone_pts = load_rois(camera_id)
+    if not violation_zone_pts or not waiting_zone_pts:
+        waiting_zone_pts, violation_zone_pts = load_rois("default")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        processed_frame = processor.process_single_frame(frame, waiting_zone_pts, violation_zone_pts)
+        
+        ret, buffer = cv2.imencode('.jpg', processed_frame)
+        if not ret:
+            continue
+        
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    
+    cap.release()
+
+@app.route('/video_feed/<video_name>')
+def video_feed(video_name):
+    """ Route để trả về luồng video đã xử lý. """
+    return Response(generate_frames(video_name),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 if __name__ == '__main__':
     database.init_database()
     logger.info("🚀 Starting Traffic Violation Detection System...")
     logger.info("📱 Access the app at: http://localhost:5000")
     app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
-
-# # ---- Các Route cho trang Admin ----
-# # Các route này giờ đây gọi các hàm từ module database.py
-# @app.route('/admin')
-# def admin_dashboard():
-#     """Admin dashboard để xem tổng quan database."""
-#     try:
-#         stats = database.get_dashboard_stats()
-#         return render_template('admin.html', **stats)
-#     except Exception as e:
-#         logger.error(f"Lỗi trang admin dashboard: {e}")
-#         flash('Lỗi khi tải dữ liệu admin')
-#         return redirect(url_for('index'))
-
-# @app.route('/admin/violations')
-# def admin_violations():
-#     """Xem tất cả vi phạm với phân trang."""
-#     page = request.args.get('page', 1, type=int)
-#     try:
-#         violations, total, total_pages = database.get_all_violations(page=page, per_page=50)
-#         return render_template('admin_violations.html',
-#                              violations=violations,
-#                              page=page,
-#                              total_pages=total_pages,
-#                              total=total)
-#     except Exception as e:
-#         logger.error(f"Lỗi trang admin violations: {e}")
-#         flash('Lỗi khi tải danh sách vi phạm')
-#         return redirect(url_for('admin_dashboard'))
-
-# @app.route('/admin/query', methods=['GET', 'POST'])
-# def admin_query():
-#     """Thực thi SQL query tùy chỉnh."""
-#     query = request.form.get('query', 'SELECT * FROM violations LIMIT 10;').strip()
-#     results, column_names, error = [], [], None
-
-#     if request.method == 'POST':
-#         if not query:
-#             flash('Vui lòng nhập SQL query')
-#         else:
-#             try:
-#                 if not query.upper().strip().startswith('SELECT'):
-#                     raise ValueError('Chỉ cho phép các câu lệnh SELECT để đảm bảo an toàn')
-#                 results, column_names = database.execute_custom_query(query)
-#             except Exception as e:
-#                 logger.error(f"Lỗi thực thi query từ admin: {e}")
-#                 error = str(e)
-#                 flash(f'Lỗi SQL: {error}')
-    
-#     return render_template('admin_query.html', 
-#                            query=query,
-#                            results=results,
-#                            column_names=column_names,
-#                            error=error)
-
-
-# @app.route('/api/auto_detect_roi', methods=['POST'])
-# def auto_detect_roi():
-#     """
-#     API để tự động phát hiện và đề xuất vùng ROI từ frame
-#     """
-#     try:
-#         if 'frame' not in request.files:
-#             return jsonify({"success": False, "error": "No frame provided"})
-        
-#         frame_file = request.files['frame']
-#         frame_bytes = frame_file.read()
-        
-#         # Chuyển từ bytes sang numpy array
-#         nparr = np.frombuffer(frame_bytes, np.uint8)
-#         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-#         if frame is None:
-#             return jsonify({"success": False, "error": "Invalid frame format"})
-        
-#         # Phát hiện vùng ROI tự động
-#         waiting_zone, violation_zone = auto_detect_roi(frame)
-        
-#         if waiting_zone and violation_zone:
-#             return jsonify({
-#                 "success": True, 
-#                 "waiting_zone": waiting_zone,
-#                 "violation_zone": violation_zone
-#             })
-#         else:
-#             return jsonify({"success": False, "error": "ROI could not be auto-detected"})
-    
-#     except Exception as e:
-#         logger.error(f"Error auto-detecting ROI: {e}")
-#         return jsonify({"success": False, "error": str(e)})
-# ---- Điểm khởi chạy của ứng dụng ----
-
-
