@@ -106,10 +106,4 @@ def red_green_yellow(rgb_image):
   # return [0,0,1] # Green
   return "green"
 
-  # f, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize = (20,10))
-  # ax1.imshow(rgb_image)
-  # ax2.imshow(red_result)
-  # ax3.imshow(yellow_result)
-  # ax4.imshow(green_result)
-  # ax5.imshow(hsv)
-  # plt.show()
+
