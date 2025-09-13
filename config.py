@@ -36,6 +36,29 @@ DEBUG = True
 HOST = '0.0.0.0'
 PORT = 5000
 
-# Cấu hình xử lý video
-# Xử lý phát hiện mỗi N khung hình (tăng hiệu suất)
-DETECTION_INTERVAL = 30
+# 1. Chọn Model YOLO:
+# 'yolov8n.pt' -> Nano: Nhanh nhất, phù hợp cho GPU yếu.
+# 'yolov8s.pt' -> Small: Cân bằng tốt giữa tốc độ và độ chính xác.
+# 'yolov8m.pt' -> Medium: Chính xác hơn nhưng chậm hơn.
+YOLO_MODEL_PATH = 'yolov8m.pt'
+
+# 2. Chọn Thuật toán Tracking:
+# 'botsort.yaml' -> Mặc định, ổn định.
+# 'bytetrack.yaml' -> Thường nhanh và tốt hơn trong các cảnh đông đúc.
+TRACKER_CONFIG_PATH = 'bytetrack.yaml'
+
+# 3. Tối ưu hóa Kích thước Khung hình:
+# Giảm kích thước khung hình trước khi xử lý để tăng tốc độ.
+# 640 là một giá trị tốt. Tăng lên 960 nếu cần độ chính xác cao hơn.
+# Đặt là None nếu muốn xử lý ở độ phân giải gốc (không khuyến khích).
+PROCESSING_FRAME_WIDTH = 640
+
+
+ENABLE_GPU_OPTIMIZATION = True
+# Sử dụng FP16 (Half-precision) để giảm VRAM và tăng tốc.
+USE_HALF_PRECISION = True
+# Một xe sẽ không bị ghi nhận vi phạm lặp lại trong khoảng thời gian này.
+VIOLATION_COOLDOWN_SECONDS = 30
+# Hệ thống sẽ kiểm tra ROI và đèn tín hiệu mỗi K khung hình.
+# Giá trị 3-5 là một sự cân bằng tốt.
+CHECK_VIOLATION_INTERVAL = 3
