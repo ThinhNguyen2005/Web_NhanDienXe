@@ -1,62 +1,76 @@
 {% extends "base.html" %}
 
-{% block title %}Lịch sử xử lý video{% endblock %}
+{% block title %}Lịch sử xử lý{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h2 class="mb-4"><i class="fas fa-history"></i> Lịch sử xử lý video</h2>
-    </div>
-</div>
+<section class="container my-5">
+    <div class="card shadow-lg border-0 rounded-4 p-4">
+        <h2 class="card-title text-center mb-5 fw-bold text-dark-blue">
+            <i class="fas fa-history me-3 text-info"></i>Lịch Sử Xử Lý Video
+        </h2>
 
-<div class="card">
-    <div class="card-body">
+        <div class="alert alert-info border-start border-primary border-4 p-4 mb-5 rounded-3 shadow-sm" role="alert">
+            <h5 class="alert-heading fw-bold text-dark-blue">
+                <i class="fas fa-info-circle me-2"></i>Thông tin
+            </h5>
+            <p class="mb-0">
+                Đây là danh sách các video đã được xử lý bởi hệ thống. Bạn có thể xem lại kết quả và chi tiết vi phạm.
+            </p>
+        </div>
+
         <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead class="table-dark">
+            <table class="table table-hover table-striped table-bordered text-center align-middle rounded-3 shadow-sm">
+                <thead class="table-primary">
                     <tr>
-                        <th>Tên video (Job ID)</th>
-                        <th class="text-center">Xem video đã xử lý</th>
-                        <th class="text-center">Xem Lịch sử vi phạm</th>
-                        <th class="text-center">Hành động</th>
+                        <th scope="col">Tên video (Job ID)</th>
+                        <th scope="col">Thời gian xử lý</th>
+                        <th scope="col">Xem video đã xử lý</th>
+                        <th scope="col">Xem lịch sử vi phạm</th>
+                        <th scope="col">Hành động</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if videos %}
-                        {% for video in videos %}
-                        <tr>
-                            <td class="align-middle">
-                                <strong>{{ video.job_id }}</strong>
-                                <br>
-                                <small class="text-muted">Vi phạm đầu tiên lúc: {{ video.first_violation_time }}</small>
-                            </td>
-                            <td class="text-center align-middle">
-                                <a href="{{ url_for('download_processed_video', job_id=video.job_id) }}" class="btn btn-success btn-sm" target="_blank" title="Xem video đã được xử lý">
-                                    <i class="fas fa-video"></i> Xem trực tiếp
-                                </a>
-                            </td>
-                            <td class="text-center align-middle">
-                                <a href="{{ url_for('show_results', job_id=video.job_id) }}" class="btn btn-info btn-sm" title="Xem chi tiết các vi phạm của video này">
-                                    <i class="fas fa-list-alt"></i> Lịch sử vi phạm
-                                </a>
-                            </td>
-                            <td class="text-center align-middle">
-                                <form action="{{ url_for('delete_history', job_id=video.job_id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử của video \'{{ video.job_id }}\'? Hành động này không thể hoàn tác.');">
-                                    <button type="submit" class="btn btn-danger btn-sm" title="Xóa video và tất cả dữ liệu liên quan">
+                    {% if history %}
+                        {% for item in history %}
+                            <tr>
+                                <td>{{ item.video_name }} ({{ item.job_id }})</td>
+                                <td>{{ item.timestamp }}</td>
+                                <td>
+                                    {% if item.processed_video_url %}
+                                        <a href="{{ item.processed_video_url }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                            <i class="fas fa-play-circle me-1"></i>Xem
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">Đang chờ...</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.violations %}
+                                        <a href="{{ url_for('violation_history', job_id=item.job_id) }}" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Chi tiết
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">Không có</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary" disabled>
                                         <i class="fas fa-trash-alt"></i> Xóa
                                     </button>
-                                </form>
-                            </td>
-                        </tr>
+                                </td>
+                            </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="4" class="text-center">Không có lịch sử nào để hiển thị.</td>
+                            <td colspan="5" class="text-muted py-4">
+                                <i class="fas fa-folder-open fa-2x d-block mb-2"></i>
+                                Không có lịch sử nào để hiển thị.
+                            </td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
         </div>
     </div>
-</div>
+</section>
 {% endblock %}
