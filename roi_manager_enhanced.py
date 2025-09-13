@@ -118,40 +118,29 @@ def check_violation_with_roi(vehicle_bbox, violation_zone_pts, waiting_zone_pts,
 def visualize_roi(frame, waiting_pts=None, violation_pts=None):
     """
     Vẽ vùng ROI (vùng chờ và vùng vi phạm) lên frame
-    
-    Args:
-        frame: Frame hình ảnh
-        waiting_pts: Danh sách điểm [(x,y), ...] tạo vùng chờ
-        violation_pts: Danh sách điểm [(x,y), ...] tạo vùng vi phạm
-    
-    Returns:
-        frame: Frame đã vẽ
     """
     h, w = frame.shape[:2]
     frame_viz = frame.copy()
     
-    # Vẽ vùng chờ (màu vàng nhạt)
-    if waiting_pts and len(waiting_pts) >= 3:
+    # === SỬA LỖI Ở ĐÂY ===
+    # Kiểm tra rõ ràng là `is not None` thay vì chỉ `if waiting_pts`
+    if waiting_pts is not None and len(waiting_pts) >= 3:
         waiting_pts_arr = np.array(waiting_pts, dtype=np.int32)
         overlay = frame_viz.copy()
         cv2.fillPoly(overlay, [waiting_pts_arr], (0, 255, 255))
         cv2.addWeighted(overlay, 0.3, frame_viz, 0.7, 0, frame_viz)
         cv2.polylines(frame_viz, [waiting_pts_arr], True, (0, 255, 255), 2)
-        
-        # Thêm label
         cv2.putText(
             frame_viz, "Vung cho", (waiting_pts_arr[0][0], waiting_pts_arr[0][1] - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     
-    # Vẽ vùng vi phạm (màu đỏ nhạt)
-    if violation_pts and len(violation_pts) >= 3:
+    # Tương tự cho vùng vi phạm
+    if violation_pts is not None and len(violation_pts) >= 3:
         violation_pts_arr = np.array(violation_pts, dtype=np.int32)
         overlay = frame_viz.copy()
         cv2.fillPoly(overlay, [violation_pts_arr], (0, 0, 255))
         cv2.addWeighted(overlay, 0.3, frame_viz, 0.7, 0, frame_viz)
         cv2.polylines(frame_viz, [violation_pts_arr], True, (0, 0, 255), 2)
-        
-        # Thêm label
         cv2.putText(
             frame_viz, "Vung vi pham", (violation_pts_arr[0][0], violation_pts_arr[0][1] - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)

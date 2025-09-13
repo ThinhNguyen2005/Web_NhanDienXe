@@ -139,19 +139,79 @@ def detect_traffic_lights(frame):
     return [d['bbox'] for d in detections]
 
 def draw_traffic_lights(frame, detections):
-    """Vẽ khung và nhãn màu cho các đèn tín hiệu đã phát hiện."""
+    """
+    Vẽ khung và nhãn màu cho các đèn tín hiệu đã phát hiện.
+    Tối ưu hóa: Khung đẹp hơn, màu sắc rõ ràng, nhãn thông tin đầy đủ.
+    """
+    # Bảng màu BGR tối ưu cho đèn giao thông
     color_map = {
-        'red': (0, 0, 255),
-        'yellow': (0, 255, 255),
-        'green': (0, 255, 0),
-        'unknown': (255, 255, 255)
+        'red': (0, 0, 255),      # Đỏ đậm
+        'yellow': (0, 255, 255), # Vàng sáng
+        'green': (0, 255, 0),    # Xanh lá
+        'unknown': (128, 128, 128) # Xám cho unknown
     }
-    for d in detections:
+    
+    # Màu nền cho nhãn (để dễ đọc)
+    label_bg_colors = {
+        'red': (0, 0, 200),
+        'yellow': (0, 200, 200),
+        'green': (0, 200, 0),
+        'unknown': (100, 100, 100)
+    }
+    
+    for i, d in enumerate(detections):
         x, y, w, h = d['bbox']
         color_name = d.get('color', 'unknown')
-        bgr_color = color_map.get(color_name, (255, 255, 255))
-        cv2.rectangle(frame, (x, y), (x + w, y + h), bgr_color, 2)
-        label = f"Light: {color_name}"
-        cv2.putText(frame, label, (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, bgr_color, 2)
+        confidence = d.get('conf', 0.0)
+        
+        # Màu khung chính
+        bgr_color = color_map.get(color_name, (128, 128, 128))
+        bg_color = label_bg_colors.get(color_name, (100, 100, 100))
+        
+        # Vẽ khung chính với độ dày tùy theo confidence
+        thickness = 3 if confidence > 0.7 else 2
+        cv2.rectangle(frame, (x, y), (x + w, y + h), bgr_color, thickness)
+        
+        # Vẽ khung phụ bên trong (tạo hiệu ứng đẹp)
+        inner_margin = 2
+        cv2.rectangle(frame, 
+                     (x + inner_margin, y + inner_margin), 
+                     (x + w - inner_margin, y + h - inner_margin), 
+                     bgr_color, 1)
+        
+        # Tạo nhãn với background
+        label_text = f"🚦 {color_name.upper()}"
+        confidence_text = f"{confidence:.2f}"
+        
+        # Font settings
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_thickness = 2
+        
+        # Tính kích thước text
+        (text_w, text_h), _ = cv2.getTextSize(label_text, font, font_scale, font_thickness)
+        (conf_w, conf_h), _ = cv2.getTextSize(confidence_text, font, font_scale - 0.1, font_thickness - 1)
+        
+        # Vị trí nhãn (phía trên khung)
+        label_x = x
+        label_y = max(y - 10, text_h + 5)
+        
+        # Vẽ background cho nhãn
+        padding = 5
+        cv2.rectangle(frame,
+                     (label_x - padding, label_y - text_h - padding),
+                     (label_x + max(text_w, conf_w) + padding, label_y + padding),
+                     bg_color, -1)
+        
+        # Vẽ text chính
+        cv2.putText(frame, label_text, (label_x, label_y), 
+                   font, font_scale, (255, 255, 255), font_thickness)
+        
+        # Vẽ confidence (nếu có)
+        if confidence > 0:
+            conf_y = label_y + conf_h + 2
+            cv2.putText(frame, confidence_text, (label_x, conf_y), 
+                       font, font_scale - 0.1, (200, 200, 200), font_thickness - 1)
+    
     return frame
 

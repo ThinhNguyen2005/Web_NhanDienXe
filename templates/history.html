@@ -30,8 +30,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% if history %}
-                        {% for item in history %}
+                    {% if videos %}
+                        {% for item in videos %}
                             <tr>
                                 <td>{{ item.video_name }} ({{ item.job_id }})</td>
                                 <td>{{ item.timestamp }}</td>
@@ -46,17 +46,20 @@
                                 </td>
                                 <td>
                                     {% if item.violations %}
-                                        <a href="{{ url_for('violation_history', job_id=item.job_id) }}" class="btn btn-sm btn-outline-danger">
-                                            <i class="fas fa-exclamation-triangle me-1"></i>Chi tiết
+                                        <a href="{{ url_for('show_results', job_id=item.job_id) }}" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Chi tiết ({{ item.violation_count }})
                                         </a>
                                     {% else %}
                                         <span class="text-muted">Không có</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-secondary" disabled>
-                                        <i class="fas fa-trash-alt"></i> Xóa
-                                    </button>
+                                    <form method="POST" action="{{ url_for('delete_history', job_id=item.job_id) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                onclick="return confirm('Bạn có chắc muốn xóa lịch sử này?')">
+                                            <i class="fas fa-trash-alt"></i> Xóa
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         {% endfor %}

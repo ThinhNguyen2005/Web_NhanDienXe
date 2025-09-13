@@ -196,17 +196,25 @@ def get_processed_videos():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT job_id, output_video
-        FROM processed_videos
-        ORDER BY rowid DESC
+        SELECT pv.job_id, pv.output_video, 
+               COUNT(v.id) as violation_count,
+               MIN(v.timestamp) as first_violation_time,
+               MAX(v.timestamp) as last_violation_time
+        FROM processed_videos pv
+        LEFT JOIN violations v ON pv.job_id = v.job_id
+        GROUP BY pv.job_id, pv.output_video
+        ORDER BY pv.rowid DESC
     ''')
     videos = []
     for row in cursor.fetchall():
-        # Nếu muốn lấy thêm thông tin, có thể join với bảng violations để lấy thời gian vi phạm đầu tiên
         videos.append({
             'job_id': row['job_id'],
+            'video_name': row['job_id'],  # Sử dụng job_id làm tên video
             'output_video': row['output_video'],
-            # 'first_violation_time': ... (nếu cần)
+            'processed_video_url': f"/download/{row['job_id']}",
+            'violation_count': row['violation_count'] or 0,
+            'timestamp': row['first_violation_time'] or 'Chưa có vi phạm',
+            'violations': row['violation_count'] > 0
         })
     conn.close()
     return videos

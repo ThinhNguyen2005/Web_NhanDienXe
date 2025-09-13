@@ -24,27 +24,27 @@ class TrafficViolationDetector:
         self.lp_detector = LicensePlateDetector()
         logger.info("✓ All detection modules initialized.")
 
-    def get_focused_traffic_light_color(self, frame):
+    def get_focused_traffic_light_info(self, frame):
         """
-        Nhận diện màu đèn tín hiệu một cách thông minh (ưu tiên kết quả trực tiếp từ YOLOv8 + phân loại màu).
+        Nhận diện màu đèn tín hiệu và trả về thông tin của đèn chính (màu và bbox).
         """
         detections = detect_traffic_lights_with_color(frame)
         if not detections:
-            return 'unknown'
-        
+            return 'unknown', None # Trả về màu và bbox là None
+
         # Chọn đèn lớn nhất làm "đèn chính"
         main_light = max(detections, key=lambda d: d['bbox'][2] * d['bbox'][3])
         color = main_light.get('color', 'unknown')
-        
-        # Fallback: nếu màu không xác định, thử crop và phân loại lại
-        if color == 'unknown':
-            x, y, w, h = main_light['bbox']
+        bbox = main_light.get('bbox')
+
+        # Fallback nếu màu không xác định
+        if color == 'unknown' and bbox:
+            x, y, w, h = bbox
             traffic_light_crop = frame[y:y+h, x:x+w]
             if traffic_light_crop.size > 0:
                 color = trafficLightColor.estimate_label(traffic_light_crop)
-
-        logger.info(f"Focused traffic light check: Detected color is '{color}'.")
-        return color
+        
+        return color, bbox # Trả về cả màu và tọa độ
 
     def get_traffic_lights_with_color(self, frame):
         """Trả về danh sách đèn giao thông kèm màu từ YOLOv8."""

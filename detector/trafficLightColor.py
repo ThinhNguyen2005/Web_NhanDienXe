@@ -47,8 +47,7 @@ def highest_sat_pixel(rgb_image):
     return 1, 0 # Red has a higher content
   return 0, 1
 
-def estimate_label(rgb_image): # Standardized RGB image
-  return red_green_yellow(rgb_image)
+
 
 def findNonZero(rgb_image):
   rows, cols, _ = rgb_image.shape
@@ -63,47 +62,76 @@ def findNonZero(rgb_image):
   return counter
 
 def red_green_yellow(rgb_image):
-  '''Determines the Red, Green, and Yellow content in each image using HSV and
-  experimentally determined thresholds. Returns a classification based on the
-  values.
-  '''
-  hsv = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
-  sum_saturation = np.sum(hsv[:,:,1]) # Sum the brightness values
-  area = 32*32
-  avg_saturation = sum_saturation / area # Find the average
+    """
+    Phân tích một ảnh RGB đã được crop của đèn giao thông và trả về màu sắc.
+    Phiên bản này đã được sửa lỗi tràn số (overflow).
 
-  sat_low = int(avg_saturation * 1.3)
-  val_low = 140
+    Args:
+        rgb_image: Ảnh crop của đèn giao thông (định dạng RGB).
 
-  # Green
-  lower_green = np.array([70,sat_low,val_low])
-  upper_green = np.array([100,255,255])
-  green_mask = cv2.inRange(hsv, lower_green, upper_green)
-  green_result = cv2.bitwise_and(rgb_image, rgb_image, mask = green_mask)
+    Returns:
+        str: "red", "green", "yellow", hoặc "unknown".
+    """
+    if rgb_image is None or rgb_image.size == 0:
+        return "unknown"
 
-  # Yellow
-  lower_yellow = np.array([10,sat_low,val_low])
-  upper_yellow = np.array([60,255,255])
-  yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
-  yellow_result = cv2.bitwise_and(rgb_image, rgb_image, mask = yellow_mask)
+    # Chuyển ảnh sang không gian màu HSV để dễ dàng phân tích màu sắc
+    hsv = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
 
-  # Red
-  lower_red = np.array([150,sat_low,val_low])
-  upper_red = np.array([180,255,255])
-  red_mask = cv2.inRange(hsv, lower_red, upper_red)
-  red_result = cv2.bitwise_and(rgb_image, rgb_image, mask = red_mask)
+    # --- Định nghĩa các dải màu trong không gian HSV ---
 
-  sum_green = findNonZero(green_result)
-  sum_yellow = findNonZero(yellow_result)
-  sum_red = findNonZero(red_result)
+    # Dải màu ĐỎ (có thể gồm 2 khoảng do màu đỏ nằm ở 2 đầu của phổ màu HSV)
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
 
-  if sum_red >= sum_yellow and sum_red >= sum_green:
-    # return [1,0,0] # Red
-    return "red"
-  if sum_yellow >= sum_green:
-    # return [0,1,0] # Yellow
-    return "yellow"
-  # return [0,0,1] # Green
-  return "green"
+    # Dải màu VÀNG
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([30, 255, 255])
 
+    # Dải màu XANH
+    lower_green = np.array([40, 40, 40])
+    upper_green = np.array([90, 255, 255])
+
+    # --- Tạo mask để lọc các pixel thuộc dải màu tương ứng ---
+    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    mask_red = cv2.add(mask_red1, mask_red2) # Kết hợp 2 mask đỏ
+
+    mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+    # --- Đếm số lượng pixel khác không trong mỗi mask ---
+    # Đây là cách hiệu quả và an toàn, không gây ra lỗi tràn số
+    red_pixels = np.count_nonzero(mask_red)
+    yellow_pixels = np.count_nonzero(mask_yellow)
+    green_pixels = np.count_nonzero(mask_green)
+
+    # Tạo một dictionary để dễ dàng tìm ra màu có nhiều pixel nhất
+    colors = {
+        "red": red_pixels,
+        "yellow": yellow_pixels,
+        "green": green_pixels
+    }
+
+    # Đặt một ngưỡng tối thiểu để tránh nhận diện nhiễu
+    # Ví dụ: phải có ít nhất 5% tổng số pixel là một màu nào đó mới tính
+    min_pixel_threshold = (rgb_image.shape[0] * rgb_image.shape[1]) * 0.05
+
+    # Lọc ra các màu vượt ngưỡng
+    valid_colors = {color: count for color, count in colors.items() if count > min_pixel_threshold}
+
+    if not valid_colors:
+        return "unknown"
+
+    # Trả về màu có số lượng pixel lớn nhất
+    return max(valid_colors, key=valid_colors.get)
+
+
+def estimate_label(rgb_image):
+    """
+    Hàm chính để ước tính màu đèn. Gọi hàm red_green_yellow đã được tối ưu.
+    """
+    return red_green_yellow(rgb_image)
 

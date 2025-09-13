@@ -19,7 +19,6 @@ import database
 from detector_manager import TrafficViolationDetector
 from video_processor import VideoProcessor
 from roi_manager_enhanced import save_rois, load_rois
-# import numpy as np
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,9 +29,6 @@ app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 
-# Đăng ký blueprint cho ROI routes
-# from routes.roi_routes import roi_routes
-# app.register_blueprint(roi_routes)
 
 # Tạo các thư mục cần thiết
 for folder in [config.UPLOAD_FOLDER, config.PROCESSED_FOLDER, config.VIOLATIONS_FOLDER]:
@@ -301,14 +297,38 @@ def history():
     return render_template('history.html', videos=videos)
 
 
+@app.route('/violation_history/<job_id>')
+def violation_history(job_id):
+    """Trang hiển thị chi tiết vi phạm của một video cụ thể."""
+    violations = database.get_violations_by_job_id(job_id)
+    return render_template('results.html', 
+                         job_id=job_id,
+                         status={'status': 'completed', 'progress': 100},
+                         violations=violations)
+
 @app.route('/delete_history/<job_id>', methods=['POST'])
 def delete_history(job_id):
-    """Xóa toàn bộ lịch sử vi phạm của một video."""
-    success = database.delete_violations_by_job_id(job_id)
-    if success:
-        flash(f"Đã xóa lịch sử vi phạm cho video {job_id}.", "success")
-    else:
+    """Xóa toàn bộ lịch sử vi phạm và video đã xử lý của một job."""
+    try:
+        # Xóa vi phạm
+        violations_deleted = database.delete_violations_by_job_id(job_id)
+        
+        # Xóa video đã xử lý
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM processed_videos WHERE job_id = ?', (job_id,))
+        videos_deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if violations_deleted or videos_deleted:
+            flash(f"Đã xóa lịch sử cho video {job_id}.", "success")
+        else:
+            flash(f"Không tìm thấy dữ liệu để xóa cho video {job_id}.", "warning")
+    except Exception as e:
+        logger.error(f"Lỗi khi xóa lịch sử cho video {job_id}: {e}")
         flash(f"Lỗi khi xóa lịch sử cho video {job_id}.", "danger")
+    
     return redirect(url_for('history'))
 if __name__ == '__main__':
     database.init_database()
