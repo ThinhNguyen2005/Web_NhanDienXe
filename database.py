@@ -24,6 +24,7 @@ def init_database():
             CREATE TABLE IF NOT EXISTS violations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id TEXT NOT NULL,
+                track_id INTEGER,
                 license_plate TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 frame_number INTEGER,
@@ -43,6 +44,14 @@ def init_database():
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_license_plate ON violations(license_plate)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_job_id ON violations(job_id)')
+        # Đảm bảo cột track_id tồn tại (migrate an toàn nếu DB cũ chưa có)
+        cursor.execute("PRAGMA table_info(violations)")
+        cols = [row[1] for row in cursor.fetchall()]
+        if 'track_id' not in cols:
+            try:
+                cursor.execute('ALTER TABLE violations ADD COLUMN track_id INTEGER')
+            except Exception:
+                pass
         conn.commit()
         conn.close()
         logger.info("✓ Database initialized successfully.")
@@ -57,9 +66,9 @@ def save_violations_to_db(job_id, violations):
         for v in violations:
             cursor.execute(
                 '''INSERT INTO violations 
-                   (job_id, license_plate, timestamp, frame_number, confidence, bbox_x, bbox_y, bbox_w, bbox_h)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                (job_id, v['license_plate'], v['timestamp'], v['frame_number'], 
+                   (job_id, track_id, license_plate, timestamp, frame_number, confidence, bbox_x, bbox_y, bbox_w, bbox_h)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                (job_id, v.get('track_id'), v['license_plate'], v['timestamp'], v['frame_number'], 
                  v['confidence'], v['bbox'][0], v['bbox'][1], v['bbox'][2], v['bbox'][3])
             )
         conn.commit()

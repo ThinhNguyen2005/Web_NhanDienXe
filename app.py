@@ -291,12 +291,42 @@ def download_processed_video(job_id):
     return redirect(url_for('history'))
 
 
-@app.route('/violation_image/<job_id>/<int:violation_id>')
+@app.route('/violation_image/<job_id>/<violation_id>')
 def get_violation_image(job_id, violation_id):
-    """Hiển thị ảnh của một vi phạm cụ thể."""
-    image_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
-    if os.path.exists(image_path):
-        return send_file(image_path)
+    """Hiển thị ảnh vi phạm với cơ chế fallback tương thích dữ liệu cũ."""
+    # 1) Thử trực tiếp theo tham số hiện tại (track_id mới hoặc id cũ nếu trùng hợp)
+    direct_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{violation_id}.jpg')
+    if os.path.exists(direct_path):
+        return send_file(direct_path)
+
+    # 2) Nếu tham số là ID trong DB, tra DB để map sang track_id rồi thử lại
+    track_id = None
+    if str(violation_id).isdigit():
+        try:
+            conn = database.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT track_id FROM violations WHERE id = ? AND job_id = ?', (int(violation_id), job_id))
+            row = cursor.fetchone()
+            conn.close()
+            if row and row['track_id'] is not None:
+                track_id = row['track_id']
+        except Exception as e:
+            logger.error(f"Error mapping DB id to track_id for job {job_id}: {e}")
+
+    if track_id is not None:
+        mapped_path = os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_{track_id}.jpg')
+        if os.path.exists(mapped_path):
+            return send_file(mapped_path)
+
+    # 3) Fallback cuối: nếu chỉ có đúng 1 ảnh cho job_id thì trả về ảnh đó (giảm 404 dữ liệu cũ)
+    try:
+        import glob
+        candidates = glob.glob(os.path.join(config.VIOLATIONS_FOLDER, f'violation_{job_id}_*.jpg'))
+        if len(candidates) == 1:
+            return send_file(candidates[0])
+    except Exception:
+        pass
+
     return "Không tìm thấy ảnh", 404
 
 

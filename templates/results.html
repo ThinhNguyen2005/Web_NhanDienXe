@@ -72,7 +72,8 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('get_violation_image', job_id=job_id, violation_id=violation.id) }}" 
+                                    {# Ưu tiên dùng track_id để khớp tên file ảnh; fallback sang id nếu thiếu #}
+                                    <a href="{{ url_for('get_violation_image', job_id=job_id, violation_id=violation.track_id or violation.id) }}" 
                                        target="_blank" class="btn btn-info btn-sm">
                                         <i class="fas fa-image"></i> Xem ảnh
                                     </a>
