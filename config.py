@@ -56,9 +56,10 @@ PROCESSING_FRAME_WIDTH = 640
 
 ENABLE_GPU_OPTIMIZATION = True
 # Sử dụng FP16 (Half-precision) để giảm VRAM và tăng tốc.
-USE_HALF_PRECISION = True
+# Tạm thời tắt FP16 để tránh dtype conflict với RTX 3050
+USE_HALF_PRECISION = False
 # Một xe sẽ không bị ghi nhận vi phạm lặp lại trong khoảng thời gian này.
-# VIOLATION_COOLDOWN_SECONDS = 30
+VIOLATION_COOLDOWN_SECONDS = 30
 # Hệ thống sẽ kiểm tra ROI và đèn tín hiệu mỗi K khung hình.
 # Giá trị 3-5 là một sự cân bằng tốt.
 CHECK_VIOLATION_INTERVAL = 3

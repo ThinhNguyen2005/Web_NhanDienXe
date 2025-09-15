@@ -50,11 +50,14 @@ logger.info("Initializing AI models globally...")
 # Kiểm tra và log device (GPU/CPU)
 try:
     import torch
-    device = 'GPU' if torch.cuda.is_available() else 'CPU'
     if torch.cuda.is_available():
-        logger.info(f"✓ GPU detected: {torch.cuda.get_device_name(0)} (CUDA {torch.version.cuda})")
+        device_name = torch.cuda.get_device_name(0)
+        cuda_version = torch.version.cuda
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        logger.info(f"🔥 GPU detected: {device_name} (CUDA {cuda_version}, {vram_gb:.1f}GB VRAM)")
+        logger.info("✓ Initializing models with GPU acceleration...")
     else:
-        logger.info("✓ Using CPU for processing")
+        logger.info("✓ Using CPU for processing (GPU not available)")
 except ImportError:
     logger.info("✓ PyTorch not available, using CPU fallback")
 
@@ -231,6 +234,25 @@ def get_status(job_id):
         status = processing_status.get(job_id, {'status': 'not_found'})
     return jsonify(status)
 
+@app.route('/api/live_summary')
+def live_summary():
+    """Tóm tắt số vi phạm trong phiên live hiện tại theo video_name (query)."""
+    video_name = request.args.get('video')
+    if not video_name:
+        return jsonify({'success': False, 'error': 'missing video'}), 400
+
+    # Lấy processor đang chạy
+    try:
+        with realtime_lock:
+            processor = realtime_processing.get(video_name)
+        if processor is None:
+            return jsonify({'success': False, 'error': 'no active live session'}), 404
+        summary = processor.get_live_summary()
+        return jsonify({'success': True, 'data': summary})
+    except Exception as e:
+        logger.error(f"live_summary error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/results/<job_id>')
 def show_results(job_id):
     """Hiển thị trang kết quả sau khi xử lý xong hoặc từ lịch sử."""
@@ -381,6 +403,9 @@ def generate_frames(video_name):
     if not os.path.exists(video_path):
         return
     processor = VideoProcessor(video_path, detector)
+    # Lưu processor để có thể lấy thống kê realtime
+    with realtime_lock:
+        realtime_processing[video_name] = processor
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -407,6 +432,13 @@ def generate_frames(video_name):
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
     
     cap.release()
+    # Kết thúc: loại bỏ processor khỏi bảng realtime
+    with realtime_lock:
+        try:
+            if realtime_processing.get(video_name) is processor:
+                del realtime_processing[video_name]
+        except Exception:
+            pass
 
 @app.route('/video_feed/<video_name>')
 def video_feed(video_name):

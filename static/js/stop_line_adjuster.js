@@ -377,67 +377,77 @@ class RoiAdjuster {
   }
 
   saveROI() {
-    // Lấy các phần tử HTML để hiển thị thông báo
     const successAlert = document.getElementById('roi-save-success-alert');
     const errorAlert = document.getElementById('roi-save-error-alert');
     const errorMessageContainer = document.getElementById('roi-error-message');
 
-    // Ẩn các thông báo cũ trước khi gửi yêu cầu mới
-    successAlert.classList.add('d-none');
-    errorAlert.classList.add('d-none');
+    // Ẩn thông báo cũ
+    if (successAlert) successAlert.classList.add('d-none');
+    if (errorAlert) errorAlert.classList.add('d-none');
 
     // Kiểm tra số điểm tối thiểu
     if (this.waitingZone.length < 3 || this.violationZone.length < 3) {
+      if (errorMessageContainer && errorAlert) {
         errorMessageContainer.textContent = 'Vùng chờ và vùng vi phạm phải có ít nhất 3 điểm!';
         errorAlert.classList.remove('d-none');
-        return;
+      }
+      return Promise.reject(new Error('ROI polygons require at least 3 points'));
     }
 
     // Chuẩn bị dữ liệu
     const data = {
-        camera_id: document.getElementById("cameraId").value || "default",
-        waiting_zone: this.waitingZone,
-        violation_zone: this.violationZone,
+      camera_id: document.getElementById('cameraId').value || 'default',
+      waiting_zone: this.waitingZone,
+      violation_zone: this.violationZone,
     };
 
-    // Gửi API request để lưu ROI
-    fetch("/api/save_roi", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+    // Gửi API request để lưu ROI và trả Promise
+    return fetch('/api/save_roi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     })
-    .then((response) => response.json())
-    .then((data) => {
+      .then((response) => response.json())
+      .then((data) => {
         if (data.success) {
-            // --- PHẦN NÂNG CẤP ---
-            // Hiện thông báo thành công
+          if (successAlert) {
             successAlert.classList.remove('d-none');
-
-            // Tự động ẩn thông báo sau 5 giây
-            setTimeout(() => {
-                successAlert.classList.add('d-none');
-            }, 5000);
-
-            // Kích hoạt nút xử lý video sau khi lưu ROI thành công
-            const btnProcessVideo = document.getElementById("btnProcessVideo");
-            if (btnProcessVideo) {
-                btnProcessVideo.disabled = false;
-                btnProcessVideo.removeAttribute("title");
-            }
-        } else {
-            // Hiện thông báo lỗi với nội dung từ server
-            errorMessageContainer.textContent = 'Lỗi khi lưu ROI: ' + data.error;
-            errorAlert.classList.remove('d-none');
+            setTimeout(() => successAlert.classList.add('d-none'), 4000);
+          }
+          const btnProcessVideo = document.getElementById('btnProcessVideo');
+          if (btnProcessVideo) {
+            btnProcessVideo.disabled = false;
+            btnProcessVideo.removeAttribute('title');
+          }
+          return data;
         }
-    })
-    .catch((error) => {
-        console.error("Lỗi:", error);
-        // Hiện thông báo lỗi chung
-        errorMessageContainer.textContent = 'Lỗi kết nối. Không thể lưu ROI.';
-        errorAlert.classList.remove('d-none');
-    });
+        if (errorMessageContainer && errorAlert) {
+          errorMessageContainer.textContent = 'Lỗi khi lưu ROI: ' + (data.error || 'Không rõ');
+          errorAlert.classList.remove('d-none');
+        }
+        throw new Error(data.error || 'Save ROI failed');
+      })
+      .catch((error) => {
+        console.error('Lỗi:', error);
+        if (errorMessageContainer && errorAlert) {
+          errorMessageContainer.textContent = 'Lỗi kết nối. Không thể lưu ROI.';
+          errorAlert.classList.remove('d-none');
+        }
+        throw error;
+      });
+  }
+
+  startDrawing(zoneType) {
+    if (zoneType === 'waiting_zone') {
+      this.isDrawingWaiting = true;
+      this.isDrawingViolation = false;
+      this.waitingZone = [];
+    } else if (zoneType === 'violation_zone') {
+      this.isDrawingWaiting = false;
+      this.isDrawingViolation = true;
+      this.violationZone = [];
+    }
+    this.updateCanvas();
   }
 
   reset() {
@@ -465,4 +475,3 @@ class RoiAdjuster {
       });
   }
 }
-

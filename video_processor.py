@@ -28,10 +28,24 @@ class TrackedVehicle:
         self.license_plate = None
         self.state = 'NEUTRAL'
         self.last_seen_frame = frame_count
+        # dấu vết để hợp nhất ID (anti-reid glitch)
+        self.history = [bbox]
 
     def update(self, bbox, frame_count):
         self.bbox = bbox
         self.last_seen_frame = frame_count
+        self.history.append(bbox)
+
+def _iou(boxA, boxB):
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[0]+boxA[2], boxB[0]+boxB[2])
+    yB = min(boxA[1]+boxA[3], boxB[1]+boxB[3])
+    inter = max(0, xB - xA) * max(0, yB - yA)
+    areaA = boxA[2]*boxA[3]
+    areaB = boxB[2]*boxB[3]
+    denom = areaA + areaB - inter
+    return inter/denom if denom>0 else 0.0
 
 class VideoProcessor:
     """
@@ -45,6 +59,9 @@ class VideoProcessor:
         self.active_tracks = {}
         self.stable_light_color = 'unknown'
         self.light_color_buffer = deque(maxlen=config.LIGHT_STATE_BUFFER_SIZE)
+        # Biến dành cho live stream summary
+        self.live_violations = []
+        self.live_violation_count = 0
 
     def reset(self):
         """
@@ -109,6 +126,18 @@ class VideoProcessor:
 
                 frame_processed, scale = self._resize_frame(frame_original, config.PROCESSING_FRAME_WIDTH)
                 tracked_results = self.detector.vehicle_detector.track_vehicles(frame_processed)
+                # Hợp nhất track IDs nếu bbox trùng lớn (IoU cao) trong cùng frame
+                merged = {}
+                iou_thresh = 0.7
+                for tr in tracked_results:
+                    duplicate_of = None
+                    for k, v in merged.items():
+                        if _iou(tr['bbox'], v['bbox']) >= iou_thresh:
+                            duplicate_of = k
+                            break
+                    if duplicate_of is None:
+                        merged[tr['track_id']] = tr
+                tracked_results = list(merged.values())
 
                 for track_data in tracked_results:
                     track_id = track_data['track_id']
@@ -154,7 +183,11 @@ class VideoProcessor:
                 self.draw_results(frame_original, scale, waiting_zone_pts, violation_zone_pts, out, light_bbox_original)
 
                 with processing_lock:
-                    processing_status[job_id] = {'status': 'processing', 'progress': (frame_count / self.total_frames) * 100}
+                    processing_status[job_id] = {
+                        'status': 'processing',
+                        'progress': (frame_count / self.total_frames) * 100,
+                        'violations_found': len(self.violations_data)
+                    }
 
             cap.release()
             out.release()
@@ -259,6 +292,18 @@ class VideoProcessor:
 
         # Theo dõi xe
         tracked_results = self.detector.vehicle_detector.track_vehicles(frame_processed)
+        # Hợp nhất track IDs cho live
+        merged = {}
+        iou_thresh = 0.7
+        for tr in tracked_results:
+            duplicate_of = None
+            for k, v in merged.items():
+                if _iou(tr['bbox'], v['bbox']) >= iou_thresh:
+                    duplicate_of = k
+                    break
+            if duplicate_of is None:
+                merged[tr['track_id']] = tr
+        tracked_results = list(merged.values())
 
         # Cập nhật các track
         for track_data in tracked_results:
@@ -301,6 +346,13 @@ class VideoProcessor:
                         bbox_original = [int(v / scale) for v in vehicle.bbox]
                         _, plate_text, _ = self.detector.extract_and_recognize_plate(frame_original, bbox_original)
                         vehicle.license_plate = plate_text
+                        # Cập nhật thống kê live
+                        self.live_violation_count += 1
+                        self.live_violations.append({
+                            'track_id': vehicle.track_id,
+                            'plate': plate_text or '',
+                            'frame': self.frame_count
+                        })
                     else:
                         vehicle.state = 'PASSED_LEGALLY'
                 elif vehicle.state == 'NEUTRAL' and is_in_violation:
@@ -309,6 +361,13 @@ class VideoProcessor:
         # Vẽ kết quả lên frame và trả về
         # Lưu ý: Hàm draw_results của bạn phải được sửa để trả về frame_viz thay vì chỉ ghi file
         return self.draw_results(frame_original, scale, waiting_zone_pts, violation_zone_pts, out_writer=None, light_bbox=light_bbox_original)
+
+    def get_live_summary(self):
+        """Trả về thống kê live hiện tại để UI hiển thị sau khi dừng."""
+        return {
+            'count': int(self.live_violation_count),
+            'violations': list(self.live_violations[-10:])  # chỉ trả về 10 bản ghi gần nhất
+        }
 
     def _handle_violation_db(self, track_id, job_id, frame_count, plate_text, plate_conf, bbox):
         violation_item = {

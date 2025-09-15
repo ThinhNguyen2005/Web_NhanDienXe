@@ -120,14 +120,6 @@
                                 <button id="btnSaveROI" type="button" class="btn btn-success btn-lg w-100 fw-bold rounded-pill">
                                     <i class="fas fa-save me-2"></i>Lưu Thiết Lập ROI
                                 </button>
-                                <!-- Alerts required by stop_line_adjuster.js -->
-                                <div id="roi-save-success-alert" class="alert alert-success d-none mt-3" role="alert">
-                                    <i class="fas fa-check-circle me-2"></i>Đã lưu ROI thành công!
-                                </div>
-                                <div id="roi-save-error-alert" class="alert alert-danger d-none mt-3" role="alert">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    <span id="roi-error-message">Đã xảy ra lỗi khi lưu ROI.</span>
-                                </div>
                             </div>
 
                             <!-- Processing Options -->
@@ -420,16 +412,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (window.roiAdjuster) {
-            window.roiAdjuster.saveROI(cameraId)
-                .then(() => {
-                    // Enable processing buttons
-                    elements.backgroundProcessBtn.disabled = false;
-                    elements.liveProcessBtn.disabled = false;
-                    showToast('Đã lưu ROI thành công!', 'success');
-                })
-                .catch((err) => {
-                    showToast('Lỗi khi lưu ROI: ' + (err?.message || 'Không rõ'), 'error');
-                });
+            window.roiAdjuster.saveROI(cameraId);
+            
+            // Enable processing buttons
+            elements.backgroundProcessBtn.disabled = false;
+            elements.liveProcessBtn.disabled = false;
+            
+            showToast('Đã lưu cấu hình ROI thành công!', 'success');
         }
     });
 
@@ -498,7 +487,18 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('btn-info');
             this.onclick = elements.liveProcessBtn.onclick;
             
-            showToast('Đã dừng xử lý trực tiếp', 'warning');
+            // Gọi API lấy tóm tắt live
+            fetch(`/api/live_summary?video=${encodeURIComponent(videoName)}`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.success) {
+                  const c = d.data?.count ?? 0;
+                  showToast(`Đã dừng. Phát hiện ${c} vi phạm trong phiên live.`, c>0?'success':'info');
+                } else {
+                  showToast('Đã dừng xử lý trực tiếp', 'warning');
+                }
+              })
+              .catch(()=>showToast('Đã dừng xử lý trực tiếp', 'warning'));
         };
     });
 

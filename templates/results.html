@@ -46,7 +46,7 @@
                 {% if violations %}
                 <h5><i class="fas fa-list"></i> Danh sách vi phạm ({{ violations|length }})</h5>
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover align-middle">
                         <thead class="table-danger">
                             <tr>
                                 <th>STT</th>
@@ -72,11 +72,11 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {# Ưu tiên dùng track_id để khớp tên file ảnh; fallback sang id nếu thiếu #}
-                                    <a href="{{ url_for('get_violation_image', job_id=job_id, violation_id=violation.track_id or violation.id) }}" 
-                                       target="_blank" class="btn btn-info btn-sm">
+                                    <button class="btn btn-info btn-sm open-image"
+                                            data-img="{{ url_for('get_violation_image', job_id=job_id, violation_id=violation.track_id or violation.id) }}"
+                                            data-idx="{{ loop.index0 }}">
                                         <i class="fas fa-image"></i> Xem ảnh
-                                    </a>
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -103,6 +103,32 @@
             </div>
         </div>
 
+        <!-- Modal xem ảnh -->
+        <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-image me-2"></i>Ảnh vi phạm</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body text-center">
+                <img id="modalImage" src="" class="img-fluid rounded" alt="violation">
+              </div>
+              <div class="modal-footer justify-content-between">
+                <button id="prevImg" type="button" class="btn btn-outline-secondary">
+                  <i class="fas fa-chevron-left"></i> Trước
+                </button>
+                <a id="downloadImg" href="#" class="btn btn-outline-primary" download>
+                  <i class="fas fa-download"></i> Tải ảnh
+                </a>
+                <button id="nextImg" type="button" class="btn btn-outline-secondary">
+                  Sau <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="mt-3 text-center">
             <a href="{{ url_for('upload_video') }}" class="btn btn-primary me-2">
                 <i class="fas fa-upload"></i> Phân tích video khác
@@ -113,4 +139,39 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function(){
+    const imageUrls = Array.from(document.querySelectorAll('.open-image'))
+      .map(btn => btn.getAttribute('data-img'));
+    let currentIdx = 0;
+
+    function show(idx){
+      if (idx < 0 || idx >= imageUrls.length) return;
+      currentIdx = idx;
+      const url = imageUrls[currentIdx];
+      const img = document.getElementById('modalImage');
+      const a = document.getElementById('downloadImg');
+      img.src = url;
+      a.href = url;
+      const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+      modal.show();
+    }
+
+    document.querySelectorAll('.open-image').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-idx')) || 0;
+        show(idx);
+      });
+    });
+
+    document.getElementById('prevImg').addEventListener('click', () => {
+      show((currentIdx - 1 + imageUrls.length) % imageUrls.length);
+    });
+    document.getElementById('nextImg').addEventListener('click', () => {
+      show((currentIdx + 1) % imageUrls.length);
+    });
+  })();
+</script>
 {% endblock %}

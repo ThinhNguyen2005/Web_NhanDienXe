@@ -60,20 +60,35 @@ pip install -r requirements.txt
 
 ### GPU Support (Khuyến nghị cho hiệu suất tốt hơn)
 
-Hệ thống tự động phát hiện và sử dụng GPU nếu có sẵn (NVIDIA với CUDA). Nếu không có GPU, sẽ tự động chuyển sang CPU.
+Hệ thống tự động phát hiện và sử dụng GPU nếu có sẵn (NVIDIA CUDA). Nếu không có, sẽ dùng CPU.
 
-**Để cài đặt PyTorch với GPU support:**
-```bash
-# Cho Windows/Linux với CUDA 12.x
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+1) Kiểm tra driver và phiên bản CUDA khả dụng:
+```powershell
+nvidia-smi
+```
+Ghi chú giá trị "CUDA Version" (ví dụ 12.1, 11.8, 13.0).
 
-# Hoặc cho CUDA 11.8
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+2) Cài đúng PyTorch CUDA (cài torch trước, rồi mới cài requirements.txt):
+```powershell
+# CUDA 12.1
+pip uninstall -y torch torchvision torchaudio
+pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision torchaudio
+
+# Nếu driver cũ: CUDA 11.8
+# pip install --index-url https://download.pytorch.org/whl/cu118 torch torchvision torchaudio
+
+# Sau đó cài phần còn lại
+pip install -r requirements.txt
 ```
 
-**Kiểm tra GPU:**
-```bash
-python -c "import torch; print('GPU available:', torch.cuda.is_available())"
+3) Xác minh GPU trong Python:
+```powershell
+python - << 'PY'
+import torch
+print('torch:', torch.__version__, 'cuda:', torch.version.cuda, 'is_available:', torch.cuda.is_available())
+if torch.cuda.is_available():
+    print('device:', torch.cuda.get_device_name(0))
+PY
 ```
 
 ### Bước 2: Chạy ứng dụng
@@ -83,6 +98,8 @@ python app.py
 ```
 
 Truy cập: http://localhost:5000
+
+Nếu log hiển thị "✓ GPU phát hiện ..." và không còn "Using CPU for processing" thì GPU đã hoạt động.
 
 ## Cấu trúc project
 

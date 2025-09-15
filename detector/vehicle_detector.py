@@ -25,18 +25,18 @@ class VehicleDetector:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model_path = config.YOLO_MODEL_PATH
             
+            logger.info(f"🔍 GPU Check: torch.cuda.is_available() = {torch.cuda.is_available()}")
+            if torch.cuda.is_available():
+                logger.info(f"🔥 GPU Info: {torch.cuda.get_device_name(0)} (Device {torch.cuda.current_device()})")
+            
             logger.info(f"Đang tải model YOLO: '{model_path}' lên thiết bị '{device}'...")
             self.model = YOLO(model_path) # Tải model gốc trước
-
-            # --- SỬA LỖI: THAY ĐỔI THỨ TỰ TỐI ƯU HÓA ---
-            # Bước 1: Hợp nhất (fuse) các lớp của model khi nó vẫn còn ở FP32
-            self.model.fuse()
-            logger.info("  ✓ Model layers fused.")
             
-            # Bước 2: Chuyển model đã được fuse sang thiết bị (GPU)
+            # Chuyển model sang thiết bị trước khi fuse để tránh lỗi
             self.model.to(device)
+            logger.info(f"  ✓ Model đã được chuyển lên {device.upper()}.")
 
-            # Bước 3: Áp dụng các tối ưu hóa GPU sau khi đã chuyển thiết bị
+            # Áp dụng các tối ưu hóa GPU trước khi fuse
             if device == 'cuda' and config.ENABLE_GPU_OPTIMIZATION:
                 logger.info("Đang bật các tối ưu hóa GPU...")
                 torch.backends.cudnn.benchmark = True
@@ -46,7 +46,16 @@ class VehicleDetector:
                     self.use_half = True
                     logger.info("  ✓ Độ chính xác bán phần (FP16) đã được bật.")
             
+            # Fuse model cuối cùng (có thể bỏ qua nếu gây lỗi)
+            try:
+                self.model.fuse()
+                logger.info("  ✓ Model layers fused.")
+            except Exception as fuse_error:
+                logger.warning(f"Bỏ qua fusing (không ảnh hưởng hiệu suất nhiều): {fuse_error}")
+                # Không raise error, tiếp tục chạy
+            
             logger.info(f"✓ Model YOLO đã được tải và cấu hình thành công.")
+            logger.info(f"✓ Sử dụng {device.upper()} cho xử lý (GPU {'khả dụng' if device == 'cuda' else 'không khả dụng'})")
 
         except Exception as e:
             logger.error(f"LỖI: Không thể tải model YOLO. Lỗi: {e}", exc_info=True)
