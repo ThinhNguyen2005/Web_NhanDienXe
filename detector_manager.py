@@ -22,7 +22,14 @@ class TrafficViolationDetector:
         logger.info("Initializing all detection modules...")
         self.vehicle_detector = VehicleDetector()
         self.lp_detector = LicensePlateDetector()
-        logger.info("✓ All detection modules initialized.")
+        # Alias tương thích cho các callsite cũ
+        # lp_recognizer dùng cho OCR, yolo_plate_detector dùng để detect biển số (nếu có)
+        self.lp_recognizer = self.lp_detector
+        try:
+            self.yolo_plate_detector = getattr(self.lp_detector, 'plate_detector', None)
+        except Exception:
+            self.yolo_plate_detector = None
+        logger.info("All detection modules initialized.")
 
     def get_focused_traffic_light_info(self, frame):
         """
@@ -86,7 +93,7 @@ class TrafficViolationDetector:
                         best_plate_box = box.xyxy.cpu().numpy()[0].astype(int)
 
         if best_plate_box is None:
-            logger.warning(f"Không tìm thấy biển số nào trong xe.")
+            logger.warning("Không tìm thấy biển số nào trong xe.")
             return vehicle_roi, "NOT_FOUND", 0.0
 
         # --- BƯỚC 2: CẮT ẢNH BIỂN SỐ VÀ GỬI CHO BỘ NHẬN DẠNG KÝ TỰ ---

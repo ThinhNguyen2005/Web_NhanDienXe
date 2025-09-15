@@ -52,8 +52,8 @@
                                 <th>STT</th>
                                 <th>Biển số xe</th>
                                 <th>Thời gian</th>
-                                <th>Frame</th>
-                                <th>Độ tin cậy</th>
+                                <!-- <th>Frame</th>
+                                <th>Độ tin cậy</th> -->
                                 <th>Hình ảnh</th>
                             </tr>
                         </thead>
@@ -65,12 +65,12 @@
                                     <strong class="text-danger">{{ violation.license_plate }}</strong>
                                 </td>
                                 <td>{{ violation.timestamp[:19].replace('T', ' ') }}</td>
-                                <td>{{ violation.frame_number }}</td>
+                                <!-- <td>{{ violation.frame_number }}</td>
                                 <td>
                                     <span class="badge bg-{% if violation.confidence > 0.8 %}success{% elif violation.confidence > 0.6 %}warning{% else %}danger{% endif %}">
                                         {{ "%.1f%%"|format(violation.confidence * 100) }}
                                     </span>
-                                </td>
+                                </td> -->
                                 <td>
                                     <button class="btn btn-info btn-sm open-image"
                                             data-img="{{ url_for('get_violation_image', job_id=job_id, violation_id=violation.track_id or violation.id) }}"

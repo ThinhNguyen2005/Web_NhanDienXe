@@ -13,6 +13,10 @@ numpy>=1.23.0
 # AI/ML Models (Optional - will fallback if not available)
 ultralytics>=8.2.0  # YOLOv8
 easyocr>=1.7.1      # OCR
+paddlepaddle-gpu>=2.6.0  # PaddleOCR GPU support
+paddleocr>=2.7.0    # PaddleOCR
+pytesseract>=0.3.10 # Tesseract OCR
+transformers>=4.21.0  # For TrOCR (optional)
 
 # PyTorch CUDA - Cài trước khi cài file này:
 # pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118

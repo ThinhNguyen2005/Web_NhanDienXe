@@ -62,6 +62,9 @@ class VideoProcessor:
         # Biến dành cho live stream summary
         self.live_violations = []
         self.live_violation_count = 0
+        # Ân hạn khi chuyển sang đèn xanh để tránh gắn cờ sai
+        self.no_violation_until_frame = 0
+        self.latest_detected_light_color = 'unknown'  # Lưu màu đèn mới nhất
 
     def reset(self):
         """
@@ -72,6 +75,8 @@ class VideoProcessor:
         self.active_tracks.clear()
         self.light_color_buffer.clear()
         self.stable_light_color = 'unknown'
+        self.latest_detected_light_color = 'unknown'
+        self.no_violation_until_frame = 0
 
     def _update_stable_light_color(self, detected_color: str):
         self.light_color_buffer.append(detected_color)
@@ -83,7 +88,8 @@ class VideoProcessor:
                 self.stable_light_color = first_color
 
     def _resize_frame(self, frame, target_width):
-        if target_width is None: return frame, 1.0
+        if target_width is None:
+            return frame, 1.0
         h, w, _ = frame.shape
         scale = target_width / w
         target_height = int(h * scale)
@@ -101,7 +107,8 @@ class VideoProcessor:
         self.reset()
         try:
             cap = cv2.VideoCapture(self.video_path)
-            if not cap.isOpened(): raise IOError(f"Không thể mở file video: {self.video_path}")
+            if not cap.isOpened():
+                raise IOError(f"Không thể mở file video: {self.video_path}")
 
             self.total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             fps = cap.get(cv2.CAP_PROP_FPS)
@@ -121,7 +128,8 @@ class VideoProcessor:
             frame_count = 0
             while cap.isOpened():
                 ret, frame_original = cap.read()
-                if not ret: break
+                if not ret:
+                    break
                 frame_count += 1
 
                 frame_processed, scale = self._resize_frame(frame_original, config.PROCESSING_FRAME_WIDTH)
@@ -148,8 +156,13 @@ class VideoProcessor:
 
                 self._cleanup_stale_tracks(frame_count)
 
+                # --- CẬP NHẬT TRẠNG THÁI ĐÈN ---
                 detected_light_color, light_bbox_scaled = self.detector.get_focused_traffic_light_info(frame_processed)
+                self.latest_detected_light_color = detected_light_color  # Lưu cho bước kiểm tra vi phạm
                 self._update_stable_light_color(detected_light_color)
+                # Kích hoạt ân hạn nếu vừa thấy đèn xanh
+                if detected_light_color == 'green':
+                    self.no_violation_until_frame = max(self.no_violation_until_frame, frame_count + config.LIGHT_GREEN_GRACE_FRAMES)
                 
                 light_bbox_original = None
                 if light_bbox_scaled is not None and scale > 0:
@@ -171,7 +184,10 @@ class VideoProcessor:
                         if vehicle.state == 'NEUTRAL' and is_in_waiting:
                             vehicle.state = 'IN_WAITING_ZONE'
                         elif vehicle.state == 'IN_WAITING_ZONE' and is_in_violation:
-                            if self.stable_light_color == 'red':
+                            # Chỉ đánh cờ khi đèn chắc chắn ĐỎ hoặc VÀNG và KHÔNG có tín hiệu XANH vừa phát hiện
+                            if (self.stable_light_color in ['red', 'yellow']) \
+                                and self.latest_detected_light_color != 'green' \
+                                and frame_count >= self.no_violation_until_frame:
                                 vehicle.state = 'COMMITTED_VIOLATION' 
                                 logger.info(f"Vehicle {vehicle.track_id} COMMITTED VIOLATION (Stable light: RED)")
                                 self.process_violation(vehicle, frame_original, scale, job_id, frame_count)
@@ -247,7 +263,8 @@ class VideoProcessor:
             }
             
             info = state_info.get(vehicle.state)
-            if not info: continue
+            if not info:
+                continue
 
             color = info['color']
             thickness = info['thickness']
@@ -317,7 +334,11 @@ class VideoProcessor:
 
         # Cập nhật trạng thái đèn
         detected_light_color, light_bbox_scaled = self.detector.get_focused_traffic_light_info(frame_processed)
+        self.latest_detected_light_color = detected_light_color  # Lưu cho bước kiểm tra vi phạm
         self._update_stable_light_color(detected_light_color)
+        # Kích hoạt ân hạn nếu vừa thấy đèn xanh
+        if detected_light_color == 'green':
+            self.no_violation_until_frame = max(self.no_violation_until_frame, self.frame_count + config.LIGHT_GREEN_GRACE_FRAMES)
 
         light_bbox_original = None
         if light_bbox_scaled is not None and scale > 0:
@@ -340,7 +361,9 @@ class VideoProcessor:
                 if vehicle.state == 'NEUTRAL' and is_in_waiting:
                     vehicle.state = 'IN_WAITING_ZONE'
                 elif vehicle.state == 'IN_WAITING_ZONE' and is_in_violation:
-                    if self.stable_light_color == 'red':
+                    if (self.stable_light_color in ['red', 'yellow']) \
+                        and self.latest_detected_light_color != 'green' \
+                        and self.frame_count >= self.no_violation_until_frame:
                         vehicle.state = 'COMMITTED_VIOLATION'
                         # Trong live stream, chúng ta chỉ cập nhật trạng thái và nhận dạng biển số để hiển thị
                         bbox_original = [int(v / scale) for v in vehicle.bbox]

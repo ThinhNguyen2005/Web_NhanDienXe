@@ -69,3 +69,6 @@ TRACK_TIMEOUT_FRAMES = 30
 
 # Số frame liên tiếp cần để xác nhận trạng thái đèn (chống nhiễu)
 LIGHT_STATE_BUFFER_SIZE = 5
+
+# Số frame ân hạn sau khi phát hiện đèn xanh (tránh false positive khi vừa chuyển đèn)
+LIGHT_GREEN_GRACE_FRAMES = 12

@@ -54,7 +54,7 @@ class VehicleDetector:
                 logger.warning(f"Bỏ qua fusing (không ảnh hưởng hiệu suất nhiều): {fuse_error}")
                 # Không raise error, tiếp tục chạy
             
-            logger.info(f"✓ Model YOLO đã được tải và cấu hình thành công.")
+            logger.info("✓ Model YOLO đã được tải và cấu hình thành công.")
             logger.info(f"✓ Sử dụng {device.upper()} cho xử lý (GPU {'khả dụng' if device == 'cuda' else 'không khả dụng'})")
 
         except Exception as e:
