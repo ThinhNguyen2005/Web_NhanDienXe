@@ -412,13 +412,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (window.roiAdjuster) {
-            window.roiAdjuster.saveROI(cameraId);
-            
-            // Enable processing buttons
-            elements.backgroundProcessBtn.disabled = false;
-            elements.liveProcessBtn.disabled = false;
-            
-            showToast('Đã lưu cấu hình ROI thành công!', 'success');
+            window.roiAdjuster.saveROI(cameraId)
+                .then(() => {
+                    // Enable processing buttons
+                    elements.backgroundProcessBtn.disabled = false;
+                    elements.liveProcessBtn.disabled = false;
+                    showToast('Đã lưu ROI thành công!', 'success');
+                })
+                .catch((err) => {
+                    showToast('Lỗi khi lưu ROI: ' + (err?.message || 'Không rõ'), 'error');
+                });
         }
     });
 
