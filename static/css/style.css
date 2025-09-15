@@ -53,8 +53,10 @@ body {
 
 /* Footer */
 footer {
-    margin-top: 50px;
-    padding: 20px;
+    position: fixed; /* Dính cố định vào màn hình */
+    bottom: 0;      /* Luôn ở cuối */
+    width: 100%;    /* Chiếm toàn bộ chiều ngang */
+    padding: 10px;
     background-color: #212529;
     color: #adb5bd;
     text-align: center;
