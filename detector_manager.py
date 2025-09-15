@@ -5,11 +5,8 @@ Giai đoạn 3: Hoàn thiện.
 import logging
 from detector.vehicle_detector import VehicleDetector
 from detector.license_plate_detector import LicensePlateDetector
-from detector import trafficLightColor
-from detector.traffic_light_detector import (
-    detect_traffic_lights_with_color,
-)
-
+from detector import traffic_light_detector
+    
 logger = logging.getLogger(__name__)
 
 class TrafficViolationDetector:
@@ -28,7 +25,7 @@ class TrafficViolationDetector:
         """
         Nhận diện màu đèn tín hiệu và trả về thông tin của đèn chính (màu và bbox).
         """
-        detections = detect_traffic_lights_with_color(frame)
+        detections = traffic_light_detector.detect_traffic_lights_with_color(frame)
         if not detections:
             return 'unknown', None # Trả về màu và bbox là None
 
@@ -42,13 +39,13 @@ class TrafficViolationDetector:
             x, y, w, h = bbox
             traffic_light_crop = frame[y:y+h, x:x+w]
             if traffic_light_crop.size > 0:
-                color = trafficLightColor.estimate_label(traffic_light_crop)
-        
+                color = traffic_light_detector.estimate_label(traffic_light_crop)
+
         return color, bbox # Trả về cả màu và tọa độ
 
     def get_traffic_lights_with_color(self, frame):
         """Trả về danh sách đèn giao thông kèm màu từ YOLOv8."""
-        return detect_traffic_lights_with_color(frame)
+        return traffic_light_detector.detect_traffic_lights_with_color(frame)
 
     def extract_and_recognize_plate(self, frame, vehicle_bbox):
         """
