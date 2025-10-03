@@ -12,7 +12,6 @@ import os
 # Sử dụng YOLOv8n, một model nhẹ và nhanh phù hợp cho việc phát hiện đèn
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _model = YOLO(os.path.join(PROJECT_DIR, "yolov8n.pt"))
-# Lớp 9 trong COCO dataset là 'traffic light'
 TRAFFIC_LIGHT_CLASS_ID = 9
 
 

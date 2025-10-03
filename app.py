@@ -195,7 +195,7 @@ def process_video_route(filename):
         flash('File không tồn tại.', 'danger')
         return redirect(url_for('upload_video'))
 
-    # --- LOGIC MỚI ĐƯỢC THÊM VÀO ---
+
     # Lấy camera_id từ tên file để kiểm tra xem ROI đã tồn tại chưa
     camera_id = os.path.splitext(filename)[0]
     waiting_zone, violation_zone = load_rois(camera_id)

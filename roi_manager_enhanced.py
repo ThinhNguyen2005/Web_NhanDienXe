@@ -122,8 +122,6 @@ def visualize_roi(frame, waiting_pts=None, violation_pts=None):
     h, w = frame.shape[:2]
     frame_viz = frame.copy()
     
-    # === SỬA LỖI Ở ĐÂY ===
-    # Kiểm tra rõ ràng là `is not None` thay vì chỉ `if waiting_pts`
     if waiting_pts is not None and len(waiting_pts) >= 3:
         waiting_pts_arr = np.array(waiting_pts, dtype=np.int32)
         overlay = frame_viz.copy()
@@ -134,7 +132,6 @@ def visualize_roi(frame, waiting_pts=None, violation_pts=None):
             frame_viz, "Vung cho", (waiting_pts_arr[0][0], waiting_pts_arr[0][1] - 10), 
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     
-    # Tương tự cho vùng vi phạm
     if violation_pts is not None and len(violation_pts) >= 3:
         violation_pts_arr = np.array(violation_pts, dtype=np.int32)
         overlay = frame_viz.copy()

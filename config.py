@@ -48,9 +48,6 @@ YOLO_MODEL_PATH = 'yolov8m.pt'
 TRACKER_CONFIG_PATH = 'bytetrack.yaml'
 
 # 3. Tối ưu hóa Kích thước Khung hình:
-# Giảm kích thước khung hình trước khi xử lý để tăng tốc độ.
-# 640 là một giá trị tốt. Tăng lên 960 nếu cần độ chính xác cao hơn.
-# Đặt là None nếu muốn xử lý ở độ phân giải gốc (không khuyến khích).
 PROCESSING_FRAME_WIDTH = 640
 
 
