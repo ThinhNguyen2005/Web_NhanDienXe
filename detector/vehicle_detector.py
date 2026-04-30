@@ -3,6 +3,7 @@ Module chuyên xử lý phát hiện và theo dõi phương tiện giao thông.
 Sửa lỗi dtype mismatch bằng cách thay đổi thứ tự fuse() và half().
 """
 import logging
+import time
 import config
 from ultralytics import YOLO
 import torch
@@ -22,6 +23,7 @@ class VehicleDetector:
         self.use_half = False # Biến để kiểm soát việc sử dụng FP16
 
         try:
+            start = time.perf_counter()
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model_path = config.YOLO_MODEL_PATH
             
@@ -56,6 +58,7 @@ class VehicleDetector:
             
             logger.info("✓ Model YOLO đã được tải và cấu hình thành công.")
             logger.info(f"✓ Sử dụng {device.upper()} cho xử lý (GPU {'khả dụng' if device == 'cuda' else 'không khả dụng'})")
+            logger.info("Vehicle YOLO initialized in %.2fs", time.perf_counter() - start)
 
         except Exception as e:
             logger.error(f"LỖI: Không thể tải model YOLO. Lỗi: {e}", exc_info=True)

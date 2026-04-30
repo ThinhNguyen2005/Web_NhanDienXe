@@ -7,14 +7,18 @@ import os
 import cv2
 import datetime
 import logging
+import time
 from threading import Lock
 import numpy as np
 from collections import deque
+from typing import TYPE_CHECKING
 
 from roi_manager_enhanced import load_rois, visualize_roi
 import config
 import database
-from detector_manager import TrafficViolationDetector
+
+if TYPE_CHECKING:
+    from detector_manager import TrafficViolationDetector
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +55,14 @@ class VideoProcessor:
     """
     Xử lý video với logic "hành trình vi phạm" và quản lý vòng đời track.
     """
-    def __init__(self, video_path: str, detector: TrafficViolationDetector):
+    def __init__(self, video_path: str, detector: "TrafficViolationDetector", options=None):
         self.video_path = video_path
         self.detector = detector
+        self.options = self._resolve_options(options)
         # Khởi tạo các biến trạng thái
         self.violations_data = []
         self.active_tracks = {}
+        self.plate_cache_by_track = {}
         self.stable_light_color = 'unknown'
         self.light_color_buffer = deque(maxlen=config.LIGHT_STATE_BUFFER_SIZE)
         # Biến dành cho live stream summary
@@ -66,6 +72,23 @@ class VideoProcessor:
         self.no_violation_until_frame = 0
         self.latest_detected_light_color = 'unknown'  # Lưu màu đèn mới nhất
 
+    def _resolve_options(self, options):
+        base = {
+            'mode': 'balanced',
+            'processing_frame_width': config.PROCESSING_FRAME_WIDTH,
+            'vehicle_detection_interval': config.VEHICLE_DETECTION_INTERVAL,
+            'traffic_light_interval': config.TRAFFIC_LIGHT_INTERVAL,
+            'status_update_interval': config.STATUS_UPDATE_INTERVAL,
+            'write_output_video': config.WRITE_OUTPUT_VIDEO,
+            'output_frame_width': config.OUTPUT_FRAME_WIDTH,
+        }
+        if options:
+            base.update({k: v for k, v in options.items() if v is not None})
+        base['vehicle_detection_interval'] = max(1, int(base['vehicle_detection_interval']))
+        base['traffic_light_interval'] = max(1, int(base['traffic_light_interval']))
+        base['status_update_interval'] = max(1, int(base['status_update_interval']))
+        return base
+
     def reset(self):
         """
         SỬA LỖI: Reset lại toàn bộ trạng thái của bộ xử lý để đảm bảo mỗi lần chạy là độc lập.
@@ -74,6 +97,7 @@ class VideoProcessor:
         self.violations_data.clear()
         self.active_tracks.clear()
         self.light_color_buffer.clear()
+        self.plate_cache_by_track.clear()
         self.stable_light_color = 'unknown'
         self.latest_detected_light_color = 'unknown'
         self.no_violation_until_frame = 0
@@ -120,10 +144,37 @@ class VideoProcessor:
             if not violation_zone_pts or not waiting_zone_pts:
                 logger.info(f"Loading default ROI for camera {camera_id}")
                 waiting_zone_pts, violation_zone_pts = load_rois("default")
-            
-            output_path = os.path.join(config.PROCESSED_FOLDER, f'processed_{job_id}.mp4')
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (original_width, original_height))
+            if len(waiting_zone_pts) < 3 or len(violation_zone_pts) < 3:
+                raise ValueError("ROI chưa hợp lệ: cần ít nhất 3 điểm cho vùng chờ và vùng vi phạm.")
+            if not fps or fps <= 0:
+                fps = 25.0
+
+            processing_width = self.options['processing_frame_width']
+            frame_scale = (processing_width / original_width) if processing_width else 1.0
+            scaled_violation_zone = np.array([(int(p[0] * frame_scale), int(p[1] * frame_scale)) for p in violation_zone_pts], dtype=np.int32)
+            scaled_waiting_zone = np.array([(int(p[0] * frame_scale), int(p[1] * frame_scale)) for p in waiting_zone_pts], dtype=np.int32)
+
+            write_output = bool(self.options['write_output_video'])
+            output_size = (original_width, original_height)
+            output_path = None
+            out = None
+            if write_output:
+                output_width = self.options.get('output_frame_width')
+                if output_width and original_width > int(output_width):
+                    output_height = int(original_height * (int(output_width) / original_width))
+                    output_size = (int(output_width), output_height)
+                output_path = os.path.join(config.PROCESSED_FOLDER, f'processed_{job_id}.mp4')
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_path, fourcc, fps, output_size)
+
+            timing = {
+                'resize': 0.0,
+                'vehicle': 0.0,
+                'light': 0.0,
+                'logic': 0.0,
+                'draw_encode': 0.0,
+                'ocr': 0.0,
+            }
 
             frame_count = 0
             while cap.isOpened():
@@ -132,46 +183,41 @@ class VideoProcessor:
                     break
                 frame_count += 1
 
-                frame_processed, scale = self._resize_frame(frame_original, config.PROCESSING_FRAME_WIDTH)
-                tracked_results = self.detector.vehicle_detector.track_vehicles(frame_processed)
-                # Hợp nhất track IDs nếu bbox trùng lớn (IoU cao) trong cùng frame
-                merged = {}
-                iou_thresh = 0.7
-                for tr in tracked_results:
-                    duplicate_of = None
-                    for k, v in merged.items():
-                        if _iou(tr['bbox'], v['bbox']) >= iou_thresh:
-                            duplicate_of = k
-                            break
-                    if duplicate_of is None:
-                        merged[tr['track_id']] = tr
-                tracked_results = list(merged.values())
+                t0 = time.perf_counter()
+                frame_processed, scale = self._resize_frame(frame_original, processing_width)
+                timing['resize'] += time.perf_counter() - t0
 
-                for track_data in tracked_results:
-                    track_id = track_data['track_id']
-                    if track_id in self.active_tracks:
-                        self.active_tracks[track_id].update(track_data['bbox'], frame_count)
-                    else:
-                        self.active_tracks[track_id] = TrackedVehicle(track_id, track_data['bbox'], frame_count)
+                if frame_count == 1 or frame_count % self.options['vehicle_detection_interval'] == 0:
+                    t0 = time.perf_counter()
+                    tracked_results = self.detector.vehicle_detector.track_vehicles(frame_processed)
+                    timing['vehicle'] += time.perf_counter() - t0
+                    tracked_results = self._merge_duplicate_tracks(tracked_results)
+
+                    for track_data in tracked_results:
+                        track_id = track_data['track_id']
+                        if track_id in self.active_tracks:
+                            self.active_tracks[track_id].update(track_data['bbox'], frame_count)
+                        else:
+                            self.active_tracks[track_id] = TrackedVehicle(track_id, track_data['bbox'], frame_count)
 
                 self._cleanup_stale_tracks(frame_count)
 
                 # --- CẬP NHẬT TRẠNG THÁI ĐÈN ---
-                detected_light_color, light_bbox_scaled = self.detector.get_focused_traffic_light_info(frame_processed)
-                self.latest_detected_light_color = detected_light_color  # Lưu cho bước kiểm tra vi phạm
-                self._update_stable_light_color(detected_light_color)
-                # Kích hoạt ân hạn nếu vừa thấy đèn xanh
-                if detected_light_color == 'green':
-                    self.no_violation_until_frame = max(self.no_violation_until_frame, frame_count + config.LIGHT_GREEN_GRACE_FRAMES)
-                
                 light_bbox_original = None
-                if light_bbox_scaled is not None and scale > 0:
-                    light_bbox_original = [int(v / scale) for v in light_bbox_scaled]
+                if frame_count == 1 or frame_count % self.options['traffic_light_interval'] == 0:
+                    t0 = time.perf_counter()
+                    detected_light_color, light_bbox_scaled = self.detector.get_focused_traffic_light_info(frame_processed)
+                    timing['light'] += time.perf_counter() - t0
+                    self.latest_detected_light_color = detected_light_color  # Lưu cho bước kiểm tra vi phạm
+                    self._update_stable_light_color(detected_light_color)
+                    # Kích hoạt ân hạn nếu vừa thấy đèn xanh
+                    if detected_light_color == 'green':
+                        self.no_violation_until_frame = max(self.no_violation_until_frame, frame_count + config.LIGHT_GREEN_GRACE_FRAMES)
+                    if light_bbox_scaled is not None and scale > 0:
+                        light_bbox_original = [int(v / scale) for v in light_bbox_scaled]
 
                 if frame_count % config.CHECK_VIOLATION_INTERVAL == 0 and self.active_tracks:
-                    scaled_violation_zone = np.array([(int(p[0] * scale), int(p[1] * scale)) for p in violation_zone_pts], dtype=np.int32)
-                    scaled_waiting_zone = np.array([(int(p[0] * scale), int(p[1] * scale)) for p in waiting_zone_pts], dtype=np.int32)
-
+                    t0 = time.perf_counter()
                     for vehicle in list(self.active_tracks.values()):
                         if vehicle.state in ['COMMITTED_VIOLATION', 'PASSED_LEGALLY']:
                             continue
@@ -190,30 +236,44 @@ class VideoProcessor:
                                 and frame_count >= self.no_violation_until_frame:
                                 vehicle.state = 'COMMITTED_VIOLATION' 
                                 logger.info(f"Vehicle {vehicle.track_id} COMMITTED VIOLATION (Stable light: RED)")
+                                ocr_start = time.perf_counter()
                                 self.process_violation(vehicle, frame_original, scale, job_id, frame_count)
+                                timing['ocr'] += time.perf_counter() - ocr_start
                             else:
                                 vehicle.state = 'PASSED_LEGALLY'
                         elif vehicle.state == 'NEUTRAL' and is_in_violation:
                             vehicle.state = 'PASSED_LEGALLY'
+                    timing['logic'] += time.perf_counter() - t0
 
-                self.draw_results(frame_original, scale, waiting_zone_pts, violation_zone_pts, out, light_bbox_original)
+                if out is not None:
+                    t0 = time.perf_counter()
+                    self.draw_results(frame_original, scale, waiting_zone_pts, violation_zone_pts, out, light_bbox_original, output_size=output_size)
+                    timing['draw_encode'] += time.perf_counter() - t0
 
-                with processing_lock:
-                    processing_status[job_id] = {
-                        'status': 'processing',
-                        'progress': (frame_count / self.total_frames) * 100,
-                        'violations_found': len(self.violations_data)
-                    }
+                if frame_count == 1 or frame_count % self.options['status_update_interval'] == 0:
+                    with processing_lock:
+                        processing_status[job_id] = {
+                            'status': 'processing',
+                            'progress': (frame_count / max(1, self.total_frames)) * 100,
+                            'violations_found': len(self.violations_data),
+                            'options': dict(self.options),
+                            'timing': {k: round(v, 3) for k, v in timing.items()}
+                        }
 
             cap.release()
-            out.release()
-            database.save_processed_video(job_id, os.path.basename(output_path))
+            if out is not None:
+                out.release()
+                database.save_processed_video(job_id, os.path.basename(output_path))
+            else:
+                database.save_processed_video(job_id, '')
             database.save_violations_to_db(job_id, self.violations_data)
             with processing_lock:
                 processing_status[job_id] = {
                     'status': 'completed',
-                    'output_video': os.path.basename(output_path),
-                    'violations_found': len(self.violations_data)
+                    'output_video': os.path.basename(output_path) if output_path else '',
+                    'violations_found': len(self.violations_data),
+                    'options': dict(self.options),
+                    'timing': {k: round(v, 3) for k, v in timing.items()}
                 }
                 # Lưu kết quả vào bộ nhớ để trang results dùng ngay, tránh hiển thị 0
                 processing_results[job_id] = {'violations': list(self.violations_data)}
@@ -223,14 +283,31 @@ class VideoProcessor:
             with processing_lock:
                 processing_status[job_id] = {'status': 'error', 'error': str(e)}
 
+    def _merge_duplicate_tracks(self, tracked_results):
+        merged = {}
+        iou_thresh = 0.7
+        for tr in tracked_results:
+            duplicate_of = None
+            for k, v in merged.items():
+                if _iou(tr['bbox'], v['bbox']) >= iou_thresh:
+                    duplicate_of = k
+                    break
+            if duplicate_of is None:
+                merged[tr['track_id']] = tr
+        return list(merged.values())
+
     def process_violation(self, vehicle, frame_original, scale, job_id, frame_count):
         bbox_original = [int(v / scale) for v in vehicle.bbox]
-        _, plate_text, plate_conf = self.detector.extract_and_recognize_plate(frame_original, bbox_original)
+        if vehicle.track_id in self.plate_cache_by_track:
+            plate_text, plate_conf = self.plate_cache_by_track[vehicle.track_id]
+        else:
+            _, plate_text, plate_conf = self.detector.extract_and_recognize_plate(frame_original, bbox_original)
+            self.plate_cache_by_track[vehicle.track_id] = (plate_text, plate_conf)
         vehicle.license_plate = plate_text
         self._handle_violation_db(vehicle.track_id, job_id, frame_count, plate_text, plate_conf, bbox_original)
         self._save_violation_image(frame_original, bbox_original, job_id, vehicle.track_id)
 
-    def draw_results(self, frame, scale, waiting_zone, violation_zone, out_writer, light_bbox=None):
+    def draw_results(self, frame, scale, waiting_zone, violation_zone, out_writer, light_bbox=None, output_size=None):
         frame_viz = visualize_roi(frame, waiting_zone, violation_zone)
         
         light_info_map = {
@@ -291,6 +368,8 @@ class VideoProcessor:
             cv2.putText(frame_viz, full_label, (label_pos[0], label_pos[1] - baseline // 2), font, font_scale, text_color, font_thickness)
 
         if out_writer is not None:
+            if output_size is not None and (frame_viz.shape[1], frame_viz.shape[0]) != output_size:
+                frame_viz = cv2.resize(frame_viz, output_size, interpolation=cv2.INTER_AREA)
             out_writer.write(frame_viz)
         else:
             return frame_viz

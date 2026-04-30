@@ -149,7 +149,7 @@ traffic-violation-detection/
 
 1. **Traffic Light Detection**: Computer vision với HSV color detection
 2. **Vehicle Detection**: YOLOv8 (fallback: simple motion detection)
-3. **License Plate Recognition**: EasyOCR (fallback: demo plate generation)
+3. **License Plate Recognition**: YOLOv5 nano detector + YOLOv5 nano OCR, EasyOCR fallback nếu model mới không khả dụng
 
 ### Performance Optimization:
 
@@ -157,7 +157,19 @@ traffic-violation-detection/
 - Threading để xử lý background không block UI
 - SQLite database với indexing cho tra cứu nhanh
 - Resize frame để giảm computational load
+- Model nhận diện xe mặc định dùng `yolov8n.pt` để ưu tiên tốc độ; có thể đổi sang `yolov8m.pt` trong `config.py` nếu cần độ chính xác cao hơn
+- Nhận diện biển số chỉ chạy khi xe đã được xác định vi phạm, model LPR được load một lần và có cache frame để giảm OCR lặp
+- Giao diện mới hỗ trợ 3 chế độ xử lý: Fast, Balanced, Quality
+- Có thể tắt ghi video output để tăng tốc khi chỉ cần ảnh/dữ liệu vi phạm
+- AI models được lazy-load: mở web không chiếm GPU, chỉ load khi bắt đầu xử lý video
 - **GPU Acceleration**: Tự động sử dụng GPU (CUDA) nếu có, chuyển sang CPU nếu không
+
+### Benchmark không cần video test
+
+```powershell
+python tools\benchmark_pipeline.py --synthetic --frames 120 --size 1280x720
+python tools\benchmark_pipeline.py --synthetic --frames 120 --size 1280x720 --no-models
+```
 
 ### Yêu cầu video:
 
