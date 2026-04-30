@@ -9,6 +9,11 @@ Werkzeug>=2.3.0
 
 opencv-python>=4.8.0
 numpy>=1.23.0
+matplotlib>=3.8.0
+pandas>=2.0.0
+requests>=2.31.0
+seaborn>=0.13.0
+tqdm>=4.66.0
 
 # AI/ML Models (Optional - will fallback if not available)
 ultralytics>=8.2.0  # YOLOv8

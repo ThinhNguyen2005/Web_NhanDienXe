@@ -8,7 +8,6 @@ và trả về kết quả cho người dùng.
 import os
 import datetime
 import logging
-import cv2
 from threading import Thread, Lock
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, Response
@@ -17,8 +16,6 @@ from werkzeug.utils import secure_filename
 # Import các module đã được tách
 import config
 import database
-from detector_manager import TrafficViolationDetector
-from video_processor import VideoProcessor
 from roi_manager_enhanced import save_rois, load_rois
 
 # Cấu hình logging
@@ -42,27 +39,40 @@ processing_lock = Lock()
 # Bổ sung biến realtime để tránh lỗi NameError khi stream
 realtime_processing = {}
 realtime_lock = Lock()
+detector = None
+detector_lock = Lock()
 
-# ---- KHỞI TẠO MODEL AI MỘT LẦN DUY NHẤT ----
-# Model sẽ được nạp vào bộ nhớ khi ứng dụng khởi động và tái sử dụng cho tất cả các request.
-logger.info("Initializing AI models globally...")
+def get_detector():
+    """
+    Lazy-load AI models only when video processing actually starts.
+    This keeps the web UI fast and avoids occupying GPU memory just by opening the site.
+    """
+    global detector
+    if detector is not None:
+        return detector
 
-# Kiểm tra và log device (GPU/CPU)
-try:
-    import torch
-    if torch.cuda.is_available():
-        device_name = torch.cuda.get_device_name(0)
-        cuda_version = torch.version.cuda
-        vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        logger.info(f"🔥 GPU detected: {device_name} (CUDA {cuda_version}, {vram_gb:.1f}GB VRAM)")
-        logger.info("✓ Initializing models with GPU acceleration...")
-    else:
-        logger.info("✓ Using CPU for processing (GPU not available)")
-except ImportError:
-    logger.info("✓ PyTorch not available, using CPU fallback")
+    with detector_lock:
+        if detector is not None:
+            return detector
 
-detector = TrafficViolationDetector()
-logger.info("✓ Global detector initialized.")
+        logger.info("Initializing AI models lazily...")
+        try:
+            import torch
+            if torch.cuda.is_available():
+                device_name = torch.cuda.get_device_name(0)
+                cuda_version = torch.version.cuda
+                vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"🔥 GPU detected: {device_name} (CUDA {cuda_version}, {vram_gb:.1f}GB VRAM)")
+            else:
+                logger.info("✓ Using CPU for processing (GPU not available)")
+        except ImportError:
+            logger.info("✓ PyTorch not available, using CPU fallback")
+
+        from detector_manager import TrafficViolationDetector
+
+        detector = TrafficViolationDetector()
+        logger.info("✓ Global detector initialized.")
+        return detector
 
 
 def allowed_file(filename):
@@ -74,8 +84,173 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
-    """Trang chủ của ứng dụng."""
-    return render_template('index.html')
+    """Trang chủ mới của ứng dụng."""
+    return moda_landing()
+
+@app.route('/moda')
+def moda_landing():
+    """RedLight AI Studio React interface."""
+    moda_index = os.path.join(config.PROJECT_ROOT, 'static', 'moda', 'index.html')
+    if not os.path.exists(moda_index):
+        return "Moda landing page has not been built yet. Run: cd frontend/moda && npm install && npm run build", 503
+    return send_file(moda_index)
+
+def list_video_files():
+    videos = []
+    if os.path.exists(config.UPLOAD_FOLDER):
+        for file in sorted(os.listdir(config.UPLOAD_FOLDER), reverse=True):
+            if file.lower().endswith(tuple(f".{ext}" for ext in config.ALLOWED_EXTENSIONS)):
+                videos.append({
+                    'name': file,
+                    'camera_id': os.path.splitext(file)[0],
+                    'path': os.path.join('uploads', file).replace('\\', '/'),
+                    'source': 'uploads'
+                })
+    if os.path.exists(config.PROCESSED_FOLDER):
+        for file in sorted(os.listdir(config.PROCESSED_FOLDER), reverse=True):
+            if file.lower().endswith(tuple(f".{ext}" for ext in config.ALLOWED_EXTENSIONS)):
+                videos.append({
+                    'name': f"[Processed] {file}",
+                    'camera_id': os.path.splitext(file)[0],
+                    'path': os.path.join('processed', file).replace('\\', '/'),
+                    'source': 'processed'
+                })
+    return videos
+
+def _row_to_dict(row):
+    return dict(row) if hasattr(row, 'keys') else row
+
+def _build_results_payload(job_id):
+    with processing_lock:
+        status = dict(processing_status.get(job_id, {}))
+        memory_results = processing_results.get(job_id, {})
+
+    violations = memory_results.get('violations') if memory_results else None
+    if not violations:
+        violations = database.get_violations_by_job_id(job_id)
+
+    normalized = []
+    for item in violations or []:
+        v = _row_to_dict(item)
+        violation_id = v.get('track_id') or v.get('id')
+        normalized.append({
+            **v,
+            'image_url': url_for('get_violation_image', job_id=job_id, violation_id=violation_id),
+        })
+
+    output_video = status.get('output_video') or database.get_output_video_by_job_id(job_id)
+    return {
+        'job_id': job_id,
+        'status': status.get('status', 'completed' if output_video or normalized else 'unknown'),
+        'progress': status.get('progress', 100 if output_video else 0),
+        'output_video': output_video,
+        'download_url': url_for('download_processed_video', job_id=job_id) if output_video else None,
+        'violations_found': status.get('violations_found', len(normalized)),
+        'violations': normalized
+    }
+
+def resolve_processing_options(payload=None):
+    payload = payload or {}
+    mode = payload.get('mode', 'balanced')
+    if mode not in config.PROCESSING_MODES:
+        mode = 'balanced'
+    options = dict(config.PROCESSING_MODES[mode])
+    options['mode'] = mode
+    if 'write_output_video' in payload:
+        options['write_output_video'] = bool(payload.get('write_output_video'))
+    return options
+
+def _run_processing_job(job_id, filepath, options=None):
+    try:
+        from video_processor import VideoProcessor
+
+        processor = VideoProcessor(filepath, get_detector(), options=options)
+        processor.process_video(job_id, processing_status, processing_results, processing_lock)
+    except Exception as e:
+        logger.error(f"Processing job {job_id} failed before processor start: {e}", exc_info=True)
+        with processing_lock:
+            processing_status[job_id] = {'status': 'error', 'error': str(e)}
+
+def start_processing_job(filepath, camera_id, options=None):
+    job_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{camera_id}"
+    options = options or resolve_processing_options()
+    with processing_lock:
+        processing_status[job_id] = {'status': 'starting', 'progress': 0, 'options': options}
+
+    thread = Thread(target=_run_processing_job, args=(job_id, filepath, options), daemon=True)
+    thread.start()
+    return job_id
+
+@app.route('/api/videos')
+def api_videos():
+    return jsonify({'success': True, 'videos': list_video_files()})
+
+@app.route('/api/upload', methods=['POST'])
+def api_upload_video():
+    if 'video' not in request.files:
+        return jsonify({'success': False, 'error': 'missing video file'}), 400
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'empty filename'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({'success': False, 'error': f"invalid file type. allowed: {', '.join(config.ALLOWED_EXTENSIONS)}"}), 400
+
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(config.UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    camera_id = os.path.splitext(filename)[0]
+    return jsonify({
+        'success': True,
+        'filename': filename,
+        'camera_id': camera_id,
+        'path': os.path.join('uploads', filename).replace('\\', '/'),
+        'videos': list_video_files()
+    })
+
+@app.route('/api/process/<filename>', methods=['POST'])
+def api_process_video(filename):
+    payload = request.get_json(silent=True) or {}
+    filepath = os.path.join(config.UPLOAD_FOLDER, secure_filename(filename))
+    if not os.path.exists(filepath):
+        return jsonify({'success': False, 'error': 'video file not found'}), 404
+
+    camera_id = os.path.splitext(os.path.basename(filepath))[0]
+    waiting_zone, violation_zone = load_rois(camera_id)
+    if not violation_zone or not waiting_zone:
+        waiting_zone, violation_zone = load_rois("default")
+    if not violation_zone or not waiting_zone:
+        return jsonify({'success': False, 'error': 'missing ROI. Save waiting and violation zones first.'}), 400
+
+    options = resolve_processing_options(payload)
+    job_id = start_processing_job(filepath, camera_id, options)
+    return jsonify({'success': True, 'job_id': job_id, 'status_url': url_for('get_status', job_id=job_id)})
+
+@app.route('/api/results/<job_id>')
+def api_results(job_id):
+    return jsonify({'success': True, 'data': _build_results_payload(job_id)})
+
+@app.route('/api/search')
+def api_search():
+    plate = request.args.get('plate', '').strip()
+    if not plate:
+        return jsonify({'success': True, 'query': plate, 'violations': []})
+    violations = [_row_to_dict(v) for v in database.search_by_plate(plate)]
+    return jsonify({'success': True, 'query': plate, 'violations': violations})
+
+@app.route('/api/history')
+def api_history():
+    return jsonify({'success': True, 'videos': database.get_processed_videos()})
+
+@app.route('/api/history/<job_id>/delete', methods=['POST'])
+def api_delete_history(job_id):
+    violations_deleted = database.delete_violations_by_job_id(job_id)
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM processed_videos WHERE job_id = ?', (job_id,))
+    videos_deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'violations_deleted': bool(violations_deleted), 'videos_deleted': videos_deleted})
 
 @app.route('/roi_config')
 def roi_config():
@@ -201,29 +376,20 @@ def process_video_route(filename):
     waiting_zone, violation_zone = load_rois(camera_id)
 
     # Nếu không có ROI cho camera_id cụ thể, thử tải ROI "default"
-    if not violation_zone:
+    if not violation_zone or not waiting_zone:
         logger.info(f"Không tìm thấy ROI cho '{camera_id}', đang thử tải ROI 'default'...")
         waiting_zone, violation_zone = load_rois("default")
 
     # Nếu vẫn không có ROI nào được cấu hình, chuyển hướng người dùng đến trang thiết lập
-    if not violation_zone:
+    if not violation_zone or not waiting_zone:
         flash(f"Chưa có cài đặt ROI cho video '{filename}'. Vui lòng thiết lập trước khi xử lý.", "warning")
         # Truyền đường dẫn của video để trang roi_config có thể tự động tải nó
         video_path = os.path.join(config.UPLOAD_FOLDER, filename)
         return redirect(url_for('roi_config', video_for_setup=video_path))
     # --- KẾT THÚC LOGIC MỚI ---
 
-    # Nếu có ROI, tiến hành xử lý như bình thường
-    job_id = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{camera_id}"
-
-    with processing_lock:
-        processing_status[job_id] = {'status': 'starting', 'progress': 0}
-
-    # Truyền đối tượng `detector` đã được khởi tạo toàn cục vào VideoProcessor.
-    processor = VideoProcessor(filepath, detector)
-    thread = Thread(target=processor.process_video, args=(job_id, processing_status, processing_results, processing_lock))
-    thread.daemon = True
-    thread.start()
+    # Nếu có ROI, tiến hành xử lý như bình thường. AI model sẽ được lazy-load trong thread xử lý.
+    job_id = start_processing_job(filepath, camera_id)
 
     return render_template('processing.html', job_id=job_id, filename=filename)
 
@@ -396,13 +562,16 @@ def delete_history(job_id):
 
 def generate_frames(video_name):
     """ Xử lý và stream từng frame của video. """
+    import cv2
+    from video_processor import VideoProcessor
+
     # Ưu tiên lấy từ uploads, nếu không có thì thử processed
     uploads_path = os.path.join(config.UPLOAD_FOLDER, video_name)
     processed_path = os.path.join(config.PROCESSED_FOLDER, video_name)
     video_path = uploads_path if os.path.exists(uploads_path) else processed_path
     if not os.path.exists(video_path):
         return
-    processor = VideoProcessor(video_path, detector)
+    processor = VideoProcessor(video_path, get_detector())
     # Lưu processor để có thể lấy thống kê realtime
     with realtime_lock:
         realtime_processing[video_name] = processor
@@ -449,4 +618,4 @@ if __name__ == '__main__':
     database.init_database()
     logger.info("🚀 Starting Traffic Violation Detection System...")
     logger.info("📱 Access the app at: http://localhost:5000")
-    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG)
+    app.run(host=config.HOST, port=config.PORT, debug=config.DEBUG, use_reloader=False)

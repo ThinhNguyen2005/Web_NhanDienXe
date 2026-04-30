@@ -40,7 +40,7 @@ PORT = 5000
 # 'yolov8n.pt' -> Nano: Nhanh nhất, phù hợp cho GPU yếu.
 # 'yolov8s.pt' -> Small: Cân bằng tốt giữa tốc độ và độ chính xác.
 # 'yolov8m.pt' -> Medium: Chính xác hơn nhưng chậm hơn.
-YOLO_MODEL_PATH = 'yolov8m.pt'
+YOLO_MODEL_PATH = 'yolov8n.pt'
 
 # 2. Chọn Thuật toán Tracking:
 # 'botsort.yaml' -> Mặc định, ổn định.
@@ -49,6 +49,45 @@ TRACKER_CONFIG_PATH = 'bytetrack.yaml'
 
 # 3. Tối ưu hóa Kích thước Khung hình:
 PROCESSING_FRAME_WIDTH = 640
+VEHICLE_DETECTION_INTERVAL = 1
+TRAFFIC_LIGHT_INTERVAL = 3
+STATUS_UPDATE_INTERVAL = 5
+WRITE_OUTPUT_VIDEO = True
+OUTPUT_FRAME_WIDTH = 960
+
+PROCESSING_MODES = {
+    'fast': {
+        'vehicle_detection_interval': 2,
+        'traffic_light_interval': 5,
+        'processing_frame_width': 512,
+        'write_output_video': False,
+        'output_frame_width': 720,
+    },
+    'balanced': {
+        'vehicle_detection_interval': VEHICLE_DETECTION_INTERVAL,
+        'traffic_light_interval': TRAFFIC_LIGHT_INTERVAL,
+        'processing_frame_width': PROCESSING_FRAME_WIDTH,
+        'write_output_video': WRITE_OUTPUT_VIDEO,
+        'output_frame_width': OUTPUT_FRAME_WIDTH,
+    },
+    'quality': {
+        'vehicle_detection_interval': 1,
+        'traffic_light_interval': 2,
+        'processing_frame_width': 800,
+        'write_output_video': True,
+        'output_frame_width': 1280,
+    },
+}
+
+# 4. Cau hinh nhan dien bien so bang YOLOv5 nano
+LP_DETECTOR_MODEL_PATH = os.path.join(PROJECT_ROOT, 'models', 'lpr', 'LP_detector_nano_61.pt')
+LP_OCR_MODEL_PATH = os.path.join(PROJECT_ROOT, 'models', 'lpr', 'LP_ocr_nano_62.pt')
+YOLOV5_LOCAL_PATH = os.path.join(PROJECT_ROOT, 'yolov5')
+LPR_CONF_THRESHOLD = 0.45
+LPR_OCR_IMG_SIZE = 640
+LPR_FRAME_CACHE_ENABLED = True
+LPR_ENABLE_EASYOCR_FALLBACK = True
+LPR_MAX_CANDIDATES = 2
 
 
 ENABLE_GPU_OPTIMIZATION = True

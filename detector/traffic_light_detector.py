@@ -8,11 +8,30 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import os
+import logging
+import time
+from threading import Lock
 
 # Sử dụng YOLOv8n, một model nhẹ và nhanh phù hợp cho việc phát hiện đèn
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_model = YOLO(os.path.join(PROJECT_DIR, "yolov8n.pt"))
+logger = logging.getLogger(__name__)
+_model = None
+_model_lock = Lock()
 TRAFFIC_LIGHT_CLASS_ID = 9
+
+def get_model():
+    global _model
+    if _model is not None:
+        return _model
+    with _model_lock:
+        if _model is not None:
+            return _model
+        start = time.perf_counter()
+        model_path = os.path.join(PROJECT_DIR, "yolov8n.pt")
+        logger.info("Loading traffic light YOLO model lazily: %s", model_path)
+        _model = YOLO(model_path)
+        logger.info("Traffic light YOLO model loaded in %.2fs", time.perf_counter() - start)
+        return _model
 
 
 def create_feature(rgb_image):
@@ -166,7 +185,7 @@ def detect_traffic_lights_with_color(frame, conf_thresh=0.4):
     Phát hiện đèn giao thông bằng YOLOv8 và phân loại màu.
     Trả về danh sách dict: { 'bbox': (x,y,w,h), 'color': 'red|yellow|green|unknown', 'conf': float }.
     """
-    results = _model(frame, classes=[TRAFFIC_LIGHT_CLASS_ID], verbose=False)
+    results = get_model()(frame, classes=[TRAFFIC_LIGHT_CLASS_ID], verbose=False)
     detections = []
     if results:
         for r in results:

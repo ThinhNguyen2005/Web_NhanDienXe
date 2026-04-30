@@ -220,7 +220,7 @@ def get_processed_videos():
             'job_id': row['job_id'],
             'video_name': row['job_id'],  # Sử dụng job_id làm tên video
             'output_video': row['output_video'],
-            'processed_video_url': f"/download/{row['job_id']}",
+            'processed_video_url': f"/download/{row['job_id']}" if row['output_video'] else None,
             'violation_count': row['violation_count'] or 0,
             'timestamp': row['first_violation_time'] or 'Chưa có vi phạm',
             'violations': row['violation_count'] > 0

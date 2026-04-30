@@ -1,0 +1,182 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #fbf7ef;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  background: #fbf7ef;
+  font-family: Inter, Avenir Next, Segoe UI, sans-serif;
+}
+
+::selection {
+  background: #9d8268;
+  color: #fbf7ef;
+}
+
+.icon-button {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(95, 73, 56, 0.22);
+  border-radius: 999px;
+  color: #5f4938;
+  transition: background-color 260ms ease, transform 260ms ease, border-color 260ms ease;
+}
+
+.icon-button:hover {
+  background: rgba(217, 196, 170, 0.28);
+  border-color: rgba(95, 73, 56, 0.38);
+  transform: translateY(-1px);
+}
+
+.panel {
+  border: 1px solid rgba(157, 130, 104, 0.24);
+  border-radius: 8px;
+  background: rgba(251, 247, 239, 0.68);
+  box-shadow: 0 24px 70px rgba(95, 73, 56, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.section-kicker {
+  margin-bottom: 1.25rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(95, 73, 56, 0.68);
+}
+
+.section-title {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(3.4rem, 8vw, 8rem);
+  line-height: 0.92;
+  color: #322921;
+}
+
+.primary-button,
+.quiet-button,
+.soft-button,
+.table-action {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: transform 240ms ease, background-color 240ms ease, border-color 240ms ease, opacity 240ms ease;
+}
+
+.primary-button {
+  border: 1px solid #5f4938;
+  background: #5f4938;
+  padding: 0.9rem 1.4rem;
+  color: #fbf7ef;
+}
+
+.quiet-button,
+.soft-button,
+.table-action {
+  border: 1px solid rgba(95, 73, 56, 0.24);
+  background: rgba(251, 247, 239, 0.5);
+  padding: 0.85rem 1.1rem;
+  color: #5f4938;
+}
+
+.primary-button:hover,
+.quiet-button:hover,
+.soft-button:hover,
+.table-action:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.soft-button.is-active {
+  border-color: #5f4938;
+  background: rgba(95, 73, 56, 0.1);
+}
+
+.table-action.danger {
+  border-color: rgba(150, 63, 45, 0.35);
+  color: #963f2d;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(95, 73, 56, 0.68);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid rgba(157, 130, 104, 0.32);
+  border-radius: 8px;
+  background: rgba(251, 247, 239, 0.78);
+  padding: 0.95rem 1rem;
+  color: #322921;
+  outline: none;
+}
+
+.field:focus {
+  border-color: #5f4938;
+  box-shadow: 0 0 0 3px rgba(95, 73, 56, 0.09);
+}
+
+.minimal-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #5f4938;
+}
+
+.minimal-table th {
+  border-bottom: 1px solid rgba(95, 73, 56, 0.24);
+  padding: 1rem;
+  text-align: left;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(95, 73, 56, 0.7);
+}
+
+.minimal-table td {
+  border-bottom: 1px solid rgba(157, 130, 104, 0.18);
+  padding: 1rem;
+  vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .icon-button {
+    height: 2.5rem;
+    width: 2.5rem;
+  }
+
+  .primary-button,
+  .quiet-button,
+  .soft-button,
+  .table-action {
+    letter-spacing: 0.12em;
+  }
+}
