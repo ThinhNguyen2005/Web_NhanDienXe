@@ -1,28 +1,63 @@
 """
-Module quản lý tất cả các tương tác với cơ sở dữ liệu SQLite.
-Bao gồm khởi tạo, lưu trữ và các hàm truy vấn cho trang admin và lịch sử.
+Module quản lý tất cả các tương tác với cơ sở dữ liệu.
+Hỗ trợ cả SQLite (cho development) và PostgreSQL (cho production).
 """
 import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import logging
 import config
+import urllib.parse as urlparse
 
 logger = logging.getLogger(__name__)
 
 def get_db_connection():
-    """Tạo và trả về một kết nối đến CSDL."""
-    conn = sqlite3.connect(config.DATABASE_FILE)
-    # Dòng row_factory này rất hữu ích, giúp bạn truy cập dữ liệu như một dictionary
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Tạo và trả về một kết nối đến CSDL (Postgres hoặc SQLite)."""
+    uri = config.DATABASE_URI
+    
+    if uri.startswith('postgres'):
+        # Cấu hình cho PostgreSQL
+        url = urlparse.urlparse(uri)
+        conn = psycopg2.connect(
+            dbname=url.path[1:],
+            user=url.username,
+            password=url.password,
+            host=url.hostname,
+            port=url.port
+        )
+        return conn
+    else:
+        # Cấu hình cho SQLite
+        db_file = uri.replace('sqlite:///', '')
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+def get_cursor(conn):
+    """Trả về cursor phù hợp với loại kết nối."""
+    if isinstance(conn, psycopg2.extensions.connection):
+        return conn.cursor(cursor_factory=RealDictCursor)
+    return conn.cursor()
+
+def get_placeholder(conn):
+    """Trả về placeholder phù hợp (? cho SQLite, %s cho Postgres)."""
+    if isinstance(conn, psycopg2.extensions.connection):
+        return '%s'
+    return '?'
 
 def init_database():
     """Khởi tạo CSDL và bảng nếu chưa tồn tại."""
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''          
+        cursor = get_cursor(conn)
+        
+        # Cú pháp tạo bảng có chút khác biệt giữa SQLite và Postgres
+        is_postgres = isinstance(conn, psycopg2.extensions.connection)
+        auto_inc = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        
+        cursor.execute(f'''          
             CREATE TABLE IF NOT EXISTS violations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {auto_inc},
                 job_id TEXT NOT NULL,
                 track_id INTEGER,
                 license_plate TEXT NOT NULL,
@@ -36,25 +71,41 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS processed_videos (
                 job_id TEXT PRIMARY KEY,
                 output_video TEXT NOT NULL
             )
         ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cameras (
+                id {auto_inc},
+                name TEXT NOT NULL,
+                rtsp_url TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_license_plate ON violations(license_plate)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_job_id ON violations(job_id)')
-        # Đảm bảo cột track_id tồn tại (migrate an toàn nếu DB cũ chưa có)
-        cursor.execute("PRAGMA table_info(violations)")
-        cols = [row[1] for row in cursor.fetchall()]
-        if 'track_id' not in cols:
-            try:
-                cursor.execute('ALTER TABLE violations ADD COLUMN track_id INTEGER')
-            except Exception:
-                pass
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON violations(timestamp)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON violations(created_at)')
+        
+        if not is_postgres:
+            # Check for track_id in SQLite (migration)
+            cursor.execute("PRAGMA table_info(violations)")
+            cols = [row[1] for row in cursor.fetchall()]
+            if 'track_id' not in cols:
+                try:
+                    cursor.execute('ALTER TABLE violations ADD COLUMN track_id INTEGER')
+                except Exception:
+                    pass
+        
         conn.commit()
         conn.close()
-        logger.info("✓ Database initialized successfully.")
+        logger.info(f"✓ Database ({'PostgreSQL' if is_postgres else 'SQLite'}) initialized successfully.")
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
@@ -62,12 +113,14 @@ def save_violations_to_db(job_id, violations):
     """Lưu danh sách các vi phạm vào CSDL."""
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = get_cursor(conn)
+        p = get_placeholder(conn)
+        
         for v in violations:
             cursor.execute(
-                '''INSERT INTO violations 
+                f'''INSERT INTO violations 
                    (job_id, track_id, license_plate, timestamp, frame_number, confidence, bbox_x, bbox_y, bbox_w, bbox_h)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})''',
                 (job_id, v.get('track_id'), v['license_plate'], v['timestamp'], v['frame_number'], 
                  v['confidence'], v['bbox'][0], v['bbox'][1], v['bbox'][2], v['bbox'][3])
             )
@@ -80,26 +133,31 @@ def save_violations_to_db(job_id, violations):
 def search_by_plate(plate_query):
     """Tìm kiếm vi phạm theo biển số."""
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = get_cursor(conn)
+    p = get_placeholder(conn)
+    
     cursor.execute(
-        "SELECT * FROM violations WHERE license_plate LIKE ? ORDER BY timestamp DESC",
+        f"SELECT * FROM violations WHERE license_plate LIKE {p} ORDER BY timestamp DESC",
         (f'%{plate_query}%',)
     )
     violations = cursor.fetchall()
     conn.close()
     return violations
 
-# --- Các hàm cho Trang Lịch Sử ---
-
 def save_processed_video(job_id, output_video):
     """Lưu tên file video đã xử lý vào CSDL."""
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT OR REPLACE INTO processed_videos (job_id, output_video) VALUES (?, ?)',
-            (job_id, output_video)
-        )
+        cursor = get_cursor(conn)
+        p = get_placeholder(conn)
+        
+        # Postgres sử dụng ON CONFLICT thay vì INSERT OR REPLACE
+        if isinstance(conn, psycopg2.extensions.connection):
+            sql = f"INSERT INTO processed_videos (job_id, output_video) VALUES ({p}, {p}) ON CONFLICT (job_id) DO UPDATE SET output_video = EXCLUDED.output_video"
+        else:
+            sql = f"INSERT OR REPLACE INTO processed_videos (job_id, output_video) VALUES ({p}, {p})"
+            
+        cursor.execute(sql, (job_id, output_video))
         conn.commit()
         conn.close()
         logger.info(f"Saved processed video for job_id {job_id}: {output_video}")
@@ -109,8 +167,9 @@ def save_processed_video(job_id, output_video):
 def get_output_video_by_job_id(job_id):
     """Lấy tên file video đã xử lý từ CSDL."""
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT output_video FROM processed_videos WHERE job_id = ?', (job_id,))
+    cursor = get_cursor(conn)
+    p = get_placeholder(conn)
+    cursor.execute(f'SELECT output_video FROM processed_videos WHERE job_id = {p}', (job_id,))
     row = cursor.fetchone()
     conn.close()
     return row['output_video'] if row else None
@@ -118,23 +177,20 @@ def get_output_video_by_job_id(job_id):
 def get_violations_by_job_id(job_id):
     """Lấy danh sách vi phạm theo job_id."""
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM violations WHERE job_id = ? ORDER BY frame_number', (job_id,))
+    cursor = get_cursor(conn)
+    p = get_placeholder(conn)
+    cursor.execute(f'SELECT * FROM violations WHERE job_id = {p} ORDER BY frame_number', (job_id,))
     rows = cursor.fetchall()
     conn.close()
-    # Chuyển mỗi row thành dict để template truy cập bằng .timestamp
-    violations = []
-    for row in rows:
-        violations.append(dict(row))
-    return violations
+    return [dict(row) for row in rows]
 
 def delete_violations_by_job_id(job_id):
     """Xóa tất cả các bản ghi vi phạm liên quan đến một job_id."""
     try:
-        # SỬA LỖI: Sử dụng hàm get_db_connection()
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM violations WHERE job_id = ?', (job_id,))
+        cursor = get_cursor(conn)
+        p = get_placeholder(conn)
+        cursor.execute(f'DELETE FROM violations WHERE job_id = {p}', (job_id,))
         conn.commit()
         conn.close()
         logger.info(f"Successfully deleted all violation records for job_id {job_id}.")
@@ -143,68 +199,14 @@ def delete_violations_by_job_id(job_id):
         logger.error(f"Database delete error for job_id {job_id}: {e}")
         return False
 
-# --- Các hàm cho Admin Dashboard ---
-
-def get_dashboard_stats():
-    """Lấy các thông số thống kê cho trang admin."""
-    stats = {}
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT COUNT(*) as total FROM violations')
-        stats['total_violations'] = cursor.fetchone()['total']
-        
-        cursor.execute('SELECT COUNT(DISTINCT license_plate) as total FROM violations')
-        stats['unique_plates'] = cursor.fetchone()['total']
-        
-        cursor.execute('SELECT COUNT(DISTINCT job_id) as total FROM violations')
-        stats['total_jobs'] = cursor.fetchone()['total']
-        
-        cursor.execute('SELECT license_plate, COUNT(*) as count FROM violations GROUP BY license_plate ORDER BY count DESC LIMIT 10')
-        stats['top_violators'] = cursor.fetchall()
-        
-        cursor.execute('SELECT * FROM violations ORDER BY created_at DESC LIMIT 20')
-        stats['recent_violations'] = cursor.fetchall()
-        
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error getting dashboard stats: {e}")
-        # Trả về giá trị mặc định nếu có lỗi
-        return {
-            'total_violations': 0, 'unique_plates': 0, 'total_jobs': 0,
-            'top_violators': [], 'recent_violations': []
-        }
-    return stats
-
-def get_all_violations(page=1, per_page=50):
-    """Lấy tất cả vi phạm với phân trang."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) as total FROM violations')
-    total = cursor.fetchone()['total']
-    offset = (page - 1) * per_page
-    cursor.execute('SELECT * FROM violations ORDER BY created_at DESC LIMIT ? OFFSET ?', (per_page, offset))
-    violations = cursor.fetchall()
-    conn.close()
-    total_pages = (total + per_page - 1) // per_page
-    return violations, total, total_pages
-
-def execute_custom_query(query):
-    """Thực thi một câu lệnh SELECT tùy chỉnh một cách an toàn."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(query)
-    results = cursor.fetchall()
-    column_names = [desc[0] for desc in cursor.description] if cursor.description else []
-    conn.close()
-    return results, column_names
-
 def get_processed_videos():
     """Lấy danh sách các video đã xử lý từ bảng processed_videos."""
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
+    cursor = get_cursor(conn)
+    
+    # SQLite sử dụng rowid, Postgres có thể sử dụng created_at hoặc tương đương nếu có
+    # Để đơn giản, ta sẽ dùng ORDER BY job_id DESC hoặc tương tự
+    query = '''
         SELECT pv.job_id, pv.output_video, 
                COUNT(v.id) as violation_count,
                MIN(v.timestamp) as first_violation_time,
@@ -212,18 +214,53 @@ def get_processed_videos():
         FROM processed_videos pv
         LEFT JOIN violations v ON pv.job_id = v.job_id
         GROUP BY pv.job_id, pv.output_video
-        ORDER BY pv.rowid DESC
-    ''')
+        ORDER BY pv.job_id DESC
+    '''
+    cursor.execute(query)
     videos = []
     for row in cursor.fetchall():
         videos.append({
             'job_id': row['job_id'],
-            'video_name': row['job_id'],  # Sử dụng job_id làm tên video
+            'video_name': row['job_id'],
             'output_video': row['output_video'],
             'processed_video_url': f"/download/{row['job_id']}" if row['output_video'] else None,
             'violation_count': row['violation_count'] or 0,
             'timestamp': row['first_violation_time'] or 'Chưa có vi phạm',
-            'violations': row['violation_count'] > 0
+            'violations': (row['violation_count'] or 0) > 0
         })
     conn.close()
     return videos
+
+def get_all_cameras():
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    cursor.execute('SELECT * FROM cameras ORDER BY created_at DESC')
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def add_camera(name, rtsp_url):
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        p = get_placeholder(conn)
+        cursor.execute('INSERT INTO cameras (name, rtsp_url) VALUES ({p}, {p})'.format(p=p), (name, rtsp_url))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error adding camera: {e}")
+        return False
+
+def delete_camera(camera_id):
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        p = get_placeholder(conn)
+        cursor.execute('DELETE FROM cameras WHERE id = {p}'.format(p=p), (camera_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting camera: {e}")
+        return False

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row mb-4 align-items-center">
+        <div class="col">
+            <h2 class="fw-bold"><i class="fas fa-video me-2"></i>Quản lý Camera IP (RTSP)</h2>
+            <p class="text-muted">Thêm và quản lý các luồng camera giám sát trực tiếp.</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary-gradient" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+                <i class="fas fa-plus me-2"></i>Thêm Camera
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4" id="cameraList">
+        {% for camera in cameras %}
+        <div class="col-md-6 col-lg-4">
+            <div class="feature-card text-start">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="glass p-3 rounded-circle" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-camera text-primary m-0"></i>
+                    </div>
+                    <button class="btn btn-link text-danger p-0" onclick="deleteCamera({{ camera.id }})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <h5 class="fw-bold mb-1">{{ camera.name }}</h5>
+                <p class="text-muted small mb-3 text-truncate">{{ camera.rtsp_url }}</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="startProcessing('{{ camera.rtsp_url }}', '{{ camera.name }}')">
+                        <i class="fas fa-play me-2"></i>Bắt đầu nhận diện
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center py-5">
+            <div class="glass p-5 rounded-4">
+                <i class="fas fa-video-slash fa-4x text-muted mb-4"></i>
+                <h5>Chưa có camera nào được thêm</h5>
+                <p class="text-muted">Bắt đầu bằng cách thêm một luồng RTSP từ camera giám sát của bạn.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal Thêm Camera -->
+<div class="modal fade" id="addCameraModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass text-white" style="background: var(--bg-dark); border: 1px solid var(--glass-border);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Thêm Camera Mới</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Tên Camera</label>
+                    <input type="text" id="camName" class="form-control" placeholder="Ví dụ: Camera Ngã Tư A">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">RTSP URL</label>
+                    <input type="text" id="camUrl" class="form-control" placeholder="rtsp://admin:password@ip_address/stream">
+                    <div class="form-text text-muted">Đảm bảo camera của bạn có thể truy cập được từ server.</div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-link text-white text-decoration-none" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary-gradient" onclick="saveCamera()">Lưu Camera</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function saveCamera() {
+    const name = document.getElementById('camName').value;
+    const rtsp_url = document.getElementById('camUrl').value;
+    
+    if(!name || !rtsp_url) return alert('Vui lòng nhập đầy đủ thông tin');
+    
+    fetch('/api/cameras/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, rtsp_url})
+    }).then(r => r.json()).then(data => {
+        if(data.success) location.reload();
+        else alert('Lỗi khi thêm camera');
+    });
+}
+
+function deleteCamera(id) {
+    if(!confirm('Bạn có chắc chắn muốn xóa camera này?')) return;
+    
+    fetch(`/api/cameras/delete/${id}`, {
+        method: 'POST'
+    }).then(r => r.json()).then(data => {
+        if(data.success) location.reload();
+    });
+}
+
+function startProcessing(url, name) {
+    // Gọi API để bắt đầu task Celery cho RTSP
+    fetch(`/api/process/${encodeURIComponent(name)}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({rtsp_url: url, mode: 'balanced'})
+    }).then(r => r.json()).then(data => {
+        if(data.success) {
+            window.location.href = `/status/${data.job_id}`;
+        } else {
+            alert(data.error || 'Lỗi khi bắt đầu xử lý');
+        }
+    });
+}
+</script>
+{% endblock %}

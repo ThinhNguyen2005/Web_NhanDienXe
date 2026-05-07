@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: traffic_db
+    restart: always
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin_password
+      - POSTGRES_DB=traffic_violations
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:alpine
+    container_name: traffic_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    container_name: traffic_web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed
+      - ./violations:/app/violations
+      - ./traffic_violations.db:/app/traffic_violations.db
+    environment:
+      - SECRET_KEY=your-production-secret-key
+      - FLASK_DEBUG=False
+      - DATABASE_URI=postgresql://admin:admin_password@db:5432/traffic_violations
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+  worker:
+    build: .
+    container_name: traffic_worker
+    command: celery -A celery_tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed
+      - ./violations:/app/violations
+      - ./traffic_violations.db:/app/traffic_violations.db
+    environment:
+      - DATABASE_URI=postgresql://admin:admin_password@db:5432/traffic_violations
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    restart: always
+
+volumes:
+  postgres_data:

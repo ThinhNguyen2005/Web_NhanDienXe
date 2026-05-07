@@ -19,6 +19,32 @@ PROCESSED_FOLDER = 'processed'
 # Thư mục để lưu trữ hình ảnh của các vi phạm
 VIOLATIONS_FOLDER = 'violations'
 
+"""
+File cấu hình cho ứng dụng Flask.
+Chứa các hằng số và cài đặt chung cho toàn bộ dự án.
+"""
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Thư mục gốc của dự án
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Cấu hình CSDL: Ưu tiên PostgreSQL từ DATABASE_URI, nếu không có dùng SQLite mặc định
+DATABASE_URI = os.getenv('DATABASE_URI', f"sqlite:///{os.path.join(PROJECT_ROOT, 'traffic_violations.db')}")
+DATABASE_FILE = 'traffic_violations.db' # Vẫn giữ để tương thích với code cũ nếu cần
+
+# Thư mục để lưu trữ các file video người dùng tải lên
+UPLOAD_FOLDER = 'uploads'
+
+# Thư mục để lưu trữ các video đã qua xử lý (đã vẽ bounding box)
+PROCESSED_FOLDER = 'processed'
+
+# Thư mục để lưu trữ hình ảnh của các vi phạm
+VIOLATIONS_FOLDER = 'violations'
+
 # Thư mục cấu hình ROI
 ROI_CONFIG_FOLDER = os.path.join('config', 'rois')
 
@@ -26,21 +52,26 @@ ROI_CONFIG_FOLDER = os.path.join('config', 'rois')
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv'}
 
 # Khóa bí mật cho Flask session, cần được thay đổi trong môi trường production
-SECRET_KEY = 'your-secret-key-change-this-in-production'
+SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-this-in-production')
 
 # Dung lượng file tối đa cho phép tải lên (500MB)
 MAX_CONTENT_LENGTH = 500 * 1024 * 1024
 
 # Cấu hình Flask
-DEBUG = True
-HOST = '0.0.0.0'
-PORT = 5000
+DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+HOST = os.getenv('FLASK_HOST', '0.0.0.0')
+PORT = int(os.getenv('FLASK_PORT', 5000))
+
 
 # 1. Chọn Model YOLO:
 # 'yolov8n.pt' -> Nano: Nhanh nhất, phù hợp cho GPU yếu.
 # 'yolov8s.pt' -> Small: Cân bằng tốt giữa tốc độ và độ chính xác.
 # 'yolov8m.pt' -> Medium: Chính xác hơn nhưng chậm hơn.
-YOLO_MODEL_PATH = 'yolov8n.pt'
+YOLO_MODEL_PATH = os.getenv('YOLO_MODEL_PATH', 'yolov8n.pt')
+
+# Cấu hình Celery & Redis
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 
 # 2. Chọn Thuật toán Tracking:
 # 'botsort.yaml' -> Mặc định, ổn định.

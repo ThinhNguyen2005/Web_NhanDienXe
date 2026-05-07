@@ -3,40 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Hệ thống nhận diện xe vượt đèn đỏ{% endblock %}</title>
+    <title>{% block title %}RedLight AI | Hệ thống nhận diện xe vượt đèn đỏ{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap & Font Awesome -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav id="main-navbar" class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
-                🚦 RedLight AI
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-traffic-light me-2"></i>REDLIGHT AI
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}"><i class="fas fa-home"></i> Trang chủ</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('upload_video') }}"><i class="fas fa-upload"></i> Upload Video</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('search_violations') }}"><i class="fas fa-search"></i> Tra cứu</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('roi_config') }}"><i class="fas fa-draw-polygon"></i> Thiết lập ROI</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('history') }}"><i class="fas fa-history"></i> Lịch sử</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}">Trang chủ</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('cameras_page') %}active{% endif %}" href="{{ url_for('cameras_page') }}">Cameras IP</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('upload_video') %}active{% endif %}" href="{{ url_for('upload_video') }}">Upload</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('search_violations') %}active{% endif %}" href="{{ url_for('search_violations') }}">Tra cứu</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('roi_config') %}active{% endif %}" href="{{ url_for('roi_config') }}">Thiết lập ROI</a></li>
+                    <li class="nav-item"><a class="nav-link {% if request.path == url_for('history') %}active{% endif %}" href="{{ url_for('history') }}">Lịch sử</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <main class="container-fluid p-0">
+    <div style="height: 70px;"></div> <!-- Spacer for fixed navbar -->
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="container mt-3">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show glass" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main>
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="footer">
-        <div class="container text-center">
-            <p class="text-light mb-0">
-                © 2025 RedLight AI | Powered by OpenCV, YOLO & Flask
+    <footer class="text-center">
+        <div class="container">
+            <p class="mb-0">
+                © 2025 <span class="text-gradient fw-bold">RedLight AI</span> Studio | Powered by OpenCV, YOLOv8 & Flask
             </p>
         </div>
     </footer>

@@ -6,7 +6,6 @@ Flask>=2.3.0
 Werkzeug>=2.3.0
 
 # Computer Vision
-
 opencv-python>=4.8.0
 numpy>=1.23.0
 matplotlib>=3.8.0
@@ -23,8 +22,7 @@ paddleocr>=2.7.0    # PaddleOCR
 pytesseract>=0.3.10 # Tesseract OCR
 transformers>=4.21.0  # For TrOCR (optional)
 
-# PyTorch CUDA - Cài trước khi cài file này:
-# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# PyTorch CUDA
 torch>=2.7.0
 torchvision>=0.22.0
 torchaudio>=2.7.0
@@ -32,12 +30,17 @@ torchaudio>=2.7.0
 # Threading and Processing
 Pillow>=9.5.0
 scipy>=1.10.0
-protobuf<4.25.0     # tránh lỗi compat với ultralytics cũ
+protobuf<4.25.0
 PyYAML>=6.0
 psutil>=5.9.0
 
-# Database (built-in)
-# sqlite3 is included with Python
+# Database
+psycopg2-binary>=2.9.9
+python-dotenv>=1.0.0
+
+# Task Queue
+celery>=5.3.6
+redis>=5.0.1
 
 # Optional: For better performance
 # imutils>=0.5.4
@@ -45,12 +48,3 @@ psutil>=5.9.0
 # Development
 # pytest>=6.0.0
 # black>=22.0.0
-
-# Installation commands:
-# pip install -r requirements.txt
-# 
-# Minimal installation (without AI models):
-# pip install Flask opencv-python numpy Pillow
-#
-# Full installation with AI:
-# pip install Flask opencv-python numpy ultralytics easyocr Pillow
