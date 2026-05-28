@@ -8,6 +8,7 @@ from psycopg2.extras import RealDictCursor
 import logging
 import config
 import urllib.parse as urlparse
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -45,69 +46,75 @@ def get_placeholder(conn):
         return '%s'
     return '?'
 
-def init_database():
-    """Khởi tạo CSDL và bảng nếu chưa tồn tại."""
-    try:
-        conn = get_db_connection()
-        cursor = get_cursor(conn)
-        
-        # Cú pháp tạo bảng có chút khác biệt giữa SQLite và Postgres
-        is_postgres = isinstance(conn, psycopg2.extensions.connection)
-        auto_inc = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
-        
-        cursor.execute(f'''          
-            CREATE TABLE IF NOT EXISTS violations (
-                id {auto_inc},
-                job_id TEXT NOT NULL,
-                track_id INTEGER,
-                license_plate TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                frame_number INTEGER,
-                confidence REAL,
-                bbox_x INTEGER,
-                bbox_y INTEGER,
-                bbox_w INTEGER,
-                bbox_h INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS processed_videos (
-                job_id TEXT PRIMARY KEY,
-                output_video TEXT NOT NULL
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cameras (
-                id {auto_inc},
-                name TEXT NOT NULL,
-                rtsp_url TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_license_plate ON violations(license_plate)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_job_id ON violations(job_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON violations(timestamp)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON violations(created_at)')
-        
-        if not is_postgres:
-            # Check for track_id in SQLite (migration)
-            cursor.execute("PRAGMA table_info(violations)")
-            cols = [row[1] for row in cursor.fetchall()]
-            if 'track_id' not in cols:
-                try:
-                    cursor.execute('ALTER TABLE violations ADD COLUMN track_id INTEGER')
-                except Exception:
-                    pass
-        
-        conn.commit()
-        conn.close()
-        logger.info(f"✓ Database ({'PostgreSQL' if is_postgres else 'SQLite'}) initialized successfully.")
-    except Exception as e:
-        logger.error(f"Error initializing database: {e}")
+def init_database(max_retries=5, delay=5):
+    """Khởi tạo CSDL và bảng nếu chưa tồn tại. Có retry cho Postgres."""
+    for attempt in range(max_retries):
+        try:
+            conn = get_db_connection()
+            cursor = get_cursor(conn)
+            
+            # Cú pháp tạo bảng có chút khác biệt giữa SQLite và Postgres
+            is_postgres = isinstance(conn, psycopg2.extensions.connection)
+            auto_inc = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+            
+            cursor.execute(f'''          
+                CREATE TABLE IF NOT EXISTS violations (
+                    id {auto_inc},
+                    job_id TEXT NOT NULL,
+                    track_id INTEGER,
+                    license_plate TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    frame_number INTEGER,
+                    confidence REAL,
+                    bbox_x INTEGER,
+                    bbox_y INTEGER,
+                    bbox_w INTEGER,
+                    bbox_h INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS processed_videos (
+                    job_id TEXT PRIMARY KEY,
+                    output_video TEXT NOT NULL
+                )
+            ''')
+            
+            cursor.execute(f'''
+                CREATE TABLE IF NOT EXISTS cameras (
+                    id {auto_inc},
+                    name TEXT NOT NULL,
+                    rtsp_url TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_license_plate ON violations(license_plate)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_job_id ON violations(job_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON violations(timestamp)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON violations(created_at)')
+            
+            if not is_postgres:
+                # Check for track_id in SQLite (migration)
+                cursor.execute("PRAGMA table_info(violations)")
+                cols = [row[1] for row in cursor.fetchall()]
+                if 'track_id' not in cols:
+                    try:
+                        cursor.execute('ALTER TABLE violations ADD COLUMN track_id INTEGER')
+                    except Exception:
+                        pass
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"✓ Database ({'PostgreSQL' if is_postgres else 'SQLite'}) initialized successfully.")
+            return
+        except Exception as e:
+            logger.error(f"Error initializing database (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                logger.error("Failed to initialize database after maximum retries.")
 
 def save_violations_to_db(job_id, violations):
     """Lưu danh sách các vi phạm vào CSDL."""

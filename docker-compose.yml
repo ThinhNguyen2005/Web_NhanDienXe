@@ -30,7 +30,6 @@ services:
       - ./uploads:/app/uploads
       - ./processed:/app/processed
       - ./violations:/app/violations
-      - ./traffic_violations.db:/app/traffic_violations.db
     environment:
       - SECRET_KEY=your-production-secret-key
       - FLASK_DEBUG=False
@@ -50,7 +49,6 @@ services:
       - ./uploads:/app/uploads
       - ./processed:/app/processed
       - ./violations:/app/violations
-      - ./traffic_violations.db:/app/traffic_violations.db
     environment:
       - DATABASE_URI=postgresql://admin:admin_password@db:5432/traffic_violations
       - CELERY_BROKER_URL=redis://redis:6379/0

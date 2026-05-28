@@ -21,6 +21,7 @@ violations/
 *.pt
 !yolov8n.pt
 !license_plate_detector.pt
+!models/lpr/*.pt
 traffic_violations.db
 .vscode/
 .agent/
