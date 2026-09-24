@@ -1,5 +1,6 @@
 venv/
 .venv/
+node_modules/
 __pycache__/
 *.pyc
 processed/
@@ -9,3 +10,4 @@ violations/
 uploads/
 rois/
 config/
+.agent/

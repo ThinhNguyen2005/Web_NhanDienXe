@@ -56,11 +56,9 @@ class TrafficViolationDetector:
 
     def extract_and_recognize_plate(self, frame, vehicle_bbox):
         """
-        Hàm chuyên biệt, kết hợp 2 bước:
-        1. Dùng YOLO để phát hiện vị trí biển số trong ảnh xe.
-        2. Dùng Tesseract để đọc ký tự từ biển số đã được cắt.
+        Cắt ROI xe rồi giao toàn bộ pipeline biển số cho LicensePlateDetector.
+        Module LPR mới tự phát hiện biển số, deskew, đọc ký tự và fallback khi cần.
         """
-        # --- BƯỚC 0: Cắt ảnh của xe ra ---
         x_v, y_v, w_v, h_v = vehicle_bbox
         x_v, y_v = max(0, x_v), max(0, y_v)
         
@@ -69,42 +67,6 @@ class TrafficViolationDetector:
         if vehicle_roi.size == 0:
             logger.warning("Vùng ROI của xe bị rỗng.")
             return None, "NO_ROI", 0.0
-        
-        # Fallback nếu YOLO biển số không khả dụng: OCR trực tiếp
-        if getattr(self, 'yolo_plate_detector', None) is None:
-            plate_text, confidence = self.lp_recognizer.recognize(vehicle_roi)
-            return vehicle_roi, plate_text, confidence
-        
-        # --- BƯỚC 1: DÙNG YOLO ĐỂ TÌM BIỂN SỐ TRONG ẢNH XE ---
-        plate_results = self.yolo_plate_detector(vehicle_roi, verbose=False)
-        
-        # Tìm biển số có độ tin cậy cao nhất
-        best_plate_box = None
-        max_conf = 0.0
-        for result in plate_results:
-            if result.boxes:
-                for box in result.boxes:
-                    conf = box.conf.item()
-                    if conf > max_conf:
-                        max_conf = conf
-                        best_plate_box = box.xyxy.cpu().numpy()[0].astype(int)
 
-        if best_plate_box is None:
-            logger.warning("Không tìm thấy biển số nào trong xe.")
-            return vehicle_roi, "NOT_FOUND", 0.0
-
-        # --- BƯỚC 2: CẮT ẢNH BIỂN SỐ VÀ GỬI CHO BỘ NHẬN DẠNG KÝ TỰ ---
-        # Tọa độ của biển số (so với ảnh vehicle_roi)
-        x1, y1, x2, y2 = best_plate_box
-        
-        # Cắt chính xác ảnh biển số
-        plate_crop = vehicle_roi[y1:y2, x1:x2]
-
-        if plate_crop.size == 0:
-            logger.warning("Ảnh biển số sau khi cắt bị rỗng.")
-            return vehicle_roi, "CROP_FAILED", 0.0
-        
-        # Gửi ảnh biển số đã cắt cho bộ nhận dạng mới và mạnh mẽ
-        plate_text, confidence = self.lp_recognizer.recognize(plate_crop)
-        
+        plate_text, confidence = self.lp_recognizer.recognize(vehicle_roi)
         return vehicle_roi, plate_text, confidence
